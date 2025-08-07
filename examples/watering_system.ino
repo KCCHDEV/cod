@@ -1,12 +1,14 @@
 /*
- * ระบบรดน้ำอัตโนมัติด้วย ESP32 + RTC + Relay
+ * ระบบรดน้ำอัตโนมัติด้วย ESP32 + RTC + Relay + Blink Camera
  * สำหรับการปลูกพืชในบ้าน
  * 
  * Features:
  * - รดน้ำอัตโนมัติตามเวลา
  * - ควบคุมผ่านเว็บไซต์
+ * - เชื่อมต่อ Blink Camera สำหรับการติดตาม
  * - ตรวจสอบความชื้นดิน (optional)
  * - ป้องกันการรดน้ำเกิน
+ * - ระบบแจ้งเตือนผ่าน Webhook
  */
 
 #include <Wire.h>
@@ -14,6 +16,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
 
 // RTC Configuration
 RTC_DS3231 rtc;
@@ -32,8 +35,29 @@ DateTime lastWatering[RELAY_COUNT];
 const char* ssid = "YOUR_WIFI_SSID";
 const char* password = "YOUR_WIFI_PASSWORD";
 
+// Blink Camera Configuration
+const char* blinkEmail = "YOUR_BLINK_EMAIL";
+const char* blinkPassword = "YOUR_BLINK_PASSWORD";
+const char* blinkAccountId = "YOUR_BLINK_ACCOUNT_ID";
+const char* blinkNetworkId = "YOUR_BLINK_NETWORK_ID";
+const char* blinkCameraId = "YOUR_BLINK_CAMERA_ID";
+
+// Blink API endpoints
+const char* blinkAuthUrl = "https://rest-prod.immedia-semi.com/api/v5/account/login";
+const char* blinkArmUrl = "https://rest-prod.immedia-semi.com/api/v1/networks/";
+const char* blinkDisarmUrl = "https://rest-prod.immedia-semi.com/api/v1/networks/";
+
+// Webhook Configuration
+const char* webhookUrl = "YOUR_WEBHOOK_URL";
+bool webhookEnabled = true;
+
 // Web Server
 WebServer server(80);
+
+// Blink authentication
+String blinkAuthToken = "";
+unsigned long lastBlinkAuth = 0;
+const unsigned long BLINK_AUTH_INTERVAL = 3600000; // 1 hour
 
 // Watering Schedule for different plants
 struct WateringSchedule {
@@ -102,7 +126,11 @@ void setup() {
   setupWebServer();
   server.begin();
   
-  Serial.println("🌱 Smart Watering System Ready!");
+  // Initialize Blink camera
+  authenticateBlink();
+  
+  Serial.println("🌱 Smart Watering System Ready with Blink Camera!");
+  sendWebhook("🌱 Basic Watering System started", "info");
   printSchedule();
 }
 
@@ -111,6 +139,7 @@ void loop() {
   checkWateringSchedule();
   checkRelayTiming();
   resetDailyCounters();
+  checkBlinkConnection();
   delay(1000);
 }
 
@@ -146,10 +175,16 @@ void checkWateringSchedule() {
 
 void startWatering(int relayIndex, int duration) {
   if (relayIndex >= 0 && relayIndex < RELAY_COUNT) {
+    // Arm Blink camera for monitoring
+    armBlinkCamera();
+    
     digitalWrite(relayPins[relayIndex], LOW); // Turn on relay
     relayStates[relayIndex] = true;
     relayStartTime[relayIndex] = rtc.now();
     relayTiming[relayIndex] = true;
+    
+    Serial.println("💧 Started watering zone " + String(relayIndex + 1) + " for " + String(duration) + " minutes");
+    sendWebhook("💧 Zone " + String(relayIndex + 1) + " watering started (" + String(duration) + " min)", "info");
   }
 }
 
@@ -184,6 +219,12 @@ void stopWatering(int relayIndex) {
     digitalWrite(relayPins[relayIndex], HIGH); // Turn off relay
     relayStates[relayIndex] = false;
     relayTiming[relayIndex] = false;
+    
+    // Disarm Blink camera
+    disarmBlinkCamera();
+    
+    Serial.println("🛑 Stopped watering zone " + String(relayIndex + 1));
+    sendWebhook("🛑 Zone " + String(relayIndex + 1) + " watering completed", "info");
   }
 }
 
@@ -488,4 +529,154 @@ void setupWebServer() {
     serializeJson(doc, response);
     server.send(200, "application/json", response);
   });
+  
+  // Blink integration endpoints
+  server.on("/api/blink/test", HTTP_POST, []() {
+    armBlinkCamera();
+    delay(2000);
+    disarmBlinkCamera();
+    server.send(200, "application/json", "{\"status\":\"blink_test_completed\"}");
+  });
+  
+  server.on("/api/blink/water", HTTP_POST, []() {
+    int zone = 0;
+    if (server.hasArg("zone")) {
+      zone = server.arg("zone").toInt();
+    }
+    
+    if (zone >= 0 && zone < RELAY_COUNT) {
+      startWatering(zone, 5); // 5 minutes default for Blink
+      server.send(200, "application/json", "{\"status\":\"watering_started\",\"zone\":" + String(zone) + "}");
+    } else {
+      server.send(400, "application/json", "{\"error\":\"invalid_zone\"}");
+    }
+  });
+  
+  server.on("/api/blink/status", HTTP_GET, []() {
+    StaticJsonDocument<512> doc;
+    doc["blink_connected"] = !blinkAuthToken.isEmpty();
+    doc["system_status"] = "running";
+    doc["active_zones"] = 0;
+    
+    for (int i = 0; i < RELAY_COUNT; i++) {
+      if (isWatering[i]) doc["active_zones"] = doc["active_zones"].as<int>() + 1;
+    }
+    
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
+  });
+}
+
+// Blink Camera Integration Functions
+void authenticateBlink() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  
+  HTTPClient http;
+  http.begin(blinkAuthUrl);
+  http.addHeader("Content-Type", "application/json");
+  
+  StaticJsonDocument<256> doc;
+  doc["email"] = blinkEmail;
+  doc["password"] = blinkPassword;
+  
+  String requestBody;
+  serializeJson(doc, requestBody);
+  
+  int httpCode = http.POST(requestBody);
+  
+  if (httpCode == 200) {
+    String response = http.getString();
+    StaticJsonDocument<1024> responseDoc;
+    deserializeJson(responseDoc, response);
+    
+    blinkAuthToken = responseDoc["auth"]["token"].as<String>();
+    lastBlinkAuth = millis();
+    Serial.println("✅ Blink authentication successful");
+    sendWebhook("📷 Blink camera connected successfully", "info");
+  } else {
+    Serial.print("❌ Blink authentication failed: ");
+    Serial.println(httpCode);
+  }
+  
+  http.end();
+}
+
+void checkBlinkConnection() {
+  if (millis() - lastBlinkAuth > BLINK_AUTH_INTERVAL) {
+    authenticateBlink();
+  }
+}
+
+void armBlinkCamera() {
+  if (blinkAuthToken.isEmpty() || WiFi.status() != WL_CONNECTED) return;
+  
+  HTTPClient http;
+  String url = blinkArmUrl + String(blinkNetworkId) + "/camera/" + String(blinkCameraId) + "/enable";
+  http.begin(url);
+  http.addHeader("TOKEN_AUTH", blinkAuthToken);
+  
+  int httpCode = http.POST("");
+  if (httpCode == 200) {
+    Serial.println("🔒 Blink camera armed for monitoring");
+  } else {
+    Serial.print("❌ Failed to arm Blink camera: ");
+    Serial.println(httpCode);
+  }
+  
+  http.end();
+}
+
+void disarmBlinkCamera() {
+  if (blinkAuthToken.isEmpty() || WiFi.status() != WL_CONNECTED) return;
+  
+  HTTPClient http;
+  String url = blinkDisarmUrl + String(blinkNetworkId) + "/camera/" + String(blinkCameraId) + "/disable";
+  http.begin(url);
+  http.addHeader("TOKEN_AUTH", blinkAuthToken);
+  
+  int httpCode = http.POST("");
+  if (httpCode == 200) {
+    Serial.println("🔓 Blink camera disarmed");
+  } else {
+    Serial.print("❌ Failed to disarm Blink camera: ");
+    Serial.println(httpCode);
+  }
+  
+  http.end();
+}
+
+void sendWebhook(String message, String level) {
+  if (!webhookEnabled || WiFi.status() != WL_CONNECTED) return;
+  
+  HTTPClient http;
+  http.begin(webhookUrl);
+  http.addHeader("Content-Type", "application/json");
+  
+  StaticJsonDocument<512> doc;
+  doc["timestamp"] = getCurrentTime();
+  doc["system"] = "Basic Watering System";
+  doc["message"] = message;
+  doc["level"] = level;
+  doc["ip"] = WiFi.localIP().toString();
+  
+  String payload;
+  serializeJson(doc, payload);
+  
+  int httpCode = http.POST(payload);
+  if (httpCode > 0) {
+    Serial.println("📤 Webhook sent: " + message);
+  }
+  
+  http.end();
+}
+
+String getCurrentTime() {
+  DateTime now = rtc.now();
+  return String(now.year()) + "-" + 
+         String(now.month()) + "-" + 
+         String(now.day()) + " " + 
+         String(now.hour()) + ":" + 
+         String(now.minute()) + ":" + 
+         String(now.second());
 } 
