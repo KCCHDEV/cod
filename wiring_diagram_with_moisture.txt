@@ -1,0 +1,200 @@
+ESP32 RTC Relay Controller with Soil Moisture Sensors - Wiring Diagram
+====================================================================
+
+ESP32 Pinout:
+┌─────────────────────────────────────────┐
+│  ESP32 Development Board                │
+│                                         │
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐    │
+│  │ 3V3 │  │ GND │  │ EN  │  │ 3V3 │    │
+│  └─────┘  └─────┘  └─────┘  └─────┘    │
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐    │
+│  │ GND │  │ GND │  │ GND │  │ GND │    │
+│  └─────┘  └─────┘  └─────┘  └─────┘    │
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐    │
+│  │ GPIO│  │ GPIO│  │ GPIO│  │ GPIO│    │
+│  │ 21  │  │ 22  │  │ 23  │  │ 19  │    │
+│  └─────┘  └─────┘  └─────┘  └─────┘    │
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐    │
+│  │ GPIO│  │ GPIO│  │ GPIO│  │ GPIO│    │
+│  │ 18  │  │ 5   │  │ 4   │  │ 2   │    │
+│  └─────┘  └─────┘  └─────┘  └─────┘    │
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐    │
+│  │ GPIO│  │ GPIO│  │ GPIO│  │ GPIO│    │
+│  │ 17  │  │ 16  │  │ 0   │  │ 1   │    │
+│  └─────┘  └─────┘  └─────┘  └─────┘    │
+└─────────────────────────────────────────┘
+
+Connections:
+============
+
+1. RTC DS3231 Module:
+   ┌─────────────────┐
+   │   DS3231 RTC    │
+   │                 │
+   │ VCC  ────────── ESP32 3.3V
+   │ GND  ────────── ESP32 GND
+   │ SDA  ────────── ESP32 GPIO21
+   │ SCL  ────────── ESP32 GPIO22
+   └─────────────────┘
+
+2. 4-Channel Relay Module:
+   ┌─────────────────────────────────┐
+   │      4-Channel Relay Module     │
+   │                                 │
+   │ VCC  ────────────────────────── ESP32 3.3V (or external 5V)
+   │ GND  ────────────────────────── ESP32 GND
+   │ IN1  ────────────────────────── ESP32 GPIO5  (Relay 1)
+   │ IN2  ────────────────────────── ESP32 GPIO18 (Relay 2)
+   │ IN3  ────────────────────────── ESP32 GPIO19 (Relay 3)
+   │ IN4  ────────────────────────── ESP32 GPIO21 (Relay 4)
+   │                                 │
+   │ NO1  ── Water Pump 1            │
+   │ COM1 ── Power Supply            │
+   │                                 │
+   │ NO2  ── Water Pump 2            │
+   │ COM2 ── Power Supply            │
+   │                                 │
+   │ NO3  ── Water Pump 3            │
+   │ COM3 ── Power Supply            │
+   │                                 │
+   │ NO4  ── Water Pump 4            │
+   │ COM4 ── Power Supply            │
+   └─────────────────────────────────┘
+
+3. Soil Moisture Sensors (4x):
+   ┌─────────────────────────────────┐
+   │    Soil Moisture Sensor 1       │
+   │                                 │
+   │ VCC  ────────────────────────── ESP32 3.3V
+   │ GND  ────────────────────────── ESP32 GND
+   │ AOUT ────────────────────────── ESP32 GPIO34 (ADC1_CH6)
+   └─────────────────────────────────┘
+   
+   ┌─────────────────────────────────┐
+   │    Soil Moisture Sensor 2       │
+   │                                 │
+   │ VCC  ────────────────────────── ESP32 3.3V
+   │ GND  ────────────────────────── ESP32 GND
+   │ AOUT ────────────────────────── ESP32 GPIO35 (ADC1_CH7)
+   └─────────────────────────────────┘
+   
+   ┌─────────────────────────────────┐
+   │    Soil Moisture Sensor 3       │
+   │                                 │
+   │ VCC  ────────────────────────── ESP32 3.3V
+   │ GND  ────────────────────────── ESP32 GND
+   │ AOUT ────────────────────────── ESP32 GPIO36 (ADC1_CH0)
+   └─────────────────────────────────┘
+   
+   ┌─────────────────────────────────┐
+   │    Soil Moisture Sensor 4       │
+   │                                 │
+   │ VCC  ────────────────────────── ESP32 3.3V
+   │ GND  ────────────────────────── ESP32 GND
+   │ AOUT ────────────────────────── ESP32 GPIO39 (ADC1_CH3)
+   └─────────────────────────────────┘
+
+4. Power Supply Connection:
+   ┌─────────────────┐
+   │  5V/2A Power    │
+   │   Supply        │
+   │                 │
+   │ +5V ─────────── Relay Module VCC
+   │ +5V ─────────── Water Pumps
+   │ GND ─────────── Relay Module GND
+   │ GND ─────────── ESP32 GND
+   │ GND ─────────── RTC GND
+   │ GND ─────────── Moisture Sensors GND
+   └─────────────────┘
+
+5. Water Pump Connections:
+   ┌─────────────────┐
+   │  Water Pump 1   │
+   │                 │
+   │ + ───────────── Relay NO1
+   │ - ───────────── Relay COM1
+   └─────────────────┘
+   
+   ┌─────────────────┐
+   │  Water Pump 2   │
+   │                 │
+   │ + ───────────── Relay NO2
+   │ - ───────────── Relay COM2
+   └─────────────────┘
+   
+   ┌─────────────────┐
+   │  Water Pump 3   │
+   │                 │
+   │ + ───────────── Relay NO3
+   │ - ───────────── Relay COM3
+   └─────────────────┘
+   
+   ┌─────────────────┐
+   │  Water Pump 4   │
+   │                 │
+   │ + ───────────── Relay NO4
+   │ - ───────────── Relay COM4
+   └─────────────────┘
+
+Complete Circuit Layout:
+========================
+
+ESP32 ── I2C ── DS3231 RTC
+  │
+  ├── GPIO5  ── Relay IN1 ── Water Pump 1
+  ├── GPIO18 ── Relay IN2 ── Water Pump 2
+  ├── GPIO19 ── Relay IN3 ── Water Pump 3
+  ├── GPIO21 ── Relay IN4 ── Water Pump 4
+  │
+  ├── GPIO34 ── Moisture Sensor 1 (Plant 1)
+  ├── GPIO35 ── Moisture Sensor 2 (Plant 2)
+  ├── GPIO36 ── Moisture Sensor 3 (Plant 3)
+  └── GPIO39 ── Moisture Sensor 4 (Plant 4)
+
+Power Distribution:
+==================
+3.3V ── ESP32 VCC
+3.3V ── RTC VCC
+3.3V ── Moisture Sensors VCC
+5V   ── Relay Module VCC
+5V   ── Water Pumps
+GND  ── All components
+
+Soil Moisture Sensor Calibration:
+=================================
+1. Dry Soil (Air): ~4095 (0% moisture)
+2. Wet Soil: ~0 (100% moisture)
+3. Threshold: ~2000 (50% moisture)
+
+Calibration Process:
+1. Insert sensor in dry soil, record value
+2. Insert sensor in wet soil, record value
+3. Adjust MOISTURE_THRESHOLD in code
+4. Test with different soil types
+
+Safety Considerations:
+======================
+- Use waterproof connectors for outdoor use
+- Add fuses for water pump protection
+- Use appropriate wire gauge for power
+- Ground all components properly
+- Add surge protection for outdoor installation
+- Use waterproof enclosures for electronics
+
+Component Specifications:
+=========================
+ESP32: 3.3V logic, 5V tolerant inputs
+RTC DS3231: 3.3V, I2C address 0x68
+Relay Module: 5V coil, 10A contact rating
+Soil Moisture Sensor: 3.3V-5V, analog output
+Water Pump: 5V-12V, check current rating
+
+Optional Additions:
+===================
+- LCD Display (I2C) for local monitoring
+- Buzzer for local alerts
+- LED indicators for status
+- Temperature/Humidity sensor (DHT22)
+- Light sensor for day/night detection
+- Rain sensor to prevent overwatering 

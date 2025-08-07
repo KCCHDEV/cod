@@ -1,0 +1,147 @@
+# 📚 Required Libraries for Tomato Watering System
+
+## Core Libraries
+
+### 1. DHT sensor library by Adafruit
+- **Version**: 1.4.4
+- **Description**: Library for DHT11, DHT22, and AM2302 temperature and humidity sensors
+- **Install**: Tools > Manage Libraries > Search "DHT sensor library"
+- **URL**: https://github.com/adafruit/DHT-sensor-library
+
+### 2. ArduinoJson by Benoit Blanchon
+- **Version**: 6.21.3
+- **Description**: JSON library for Arduino
+- **Install**: Tools > Manage Libraries > Search "ArduinoJson"
+- **URL**: https://github.com/bblanchon/ArduinoJson
+
+## Built-in Libraries (No Installation Required)
+
+### 3. WiFi
+- **Description**: WiFi library for ESP32
+- **Include**: `#include <WiFi.h>`
+
+### 4. WebServer
+- **Description**: Web server library for ESP32
+- **Include**: `#include <WebServer.h>`
+
+### 5. Wire
+- **Description**: I2C communication library
+- **Include**: `#include <Wire.h>`
+
+## Installation Steps
+
+### Step 1: Open Arduino IDE
+1. เปิด Arduino IDE
+2. ไปที่ Tools > Manage Libraries
+
+### Step 2: Install DHT sensor library
+1. ค้นหา "DHT sensor library"
+2. เลือก "DHT sensor library by Adafruit"
+3. กด Install
+
+### Step 3: Install ArduinoJson
+1. ค้นหา "ArduinoJson"
+2. เลือก "ArduinoJson by Benoit Blanchon"
+3. กด Install
+
+## Board Configuration
+
+### ESP32 Board Settings
+```
+Board: "ESP32 Dev Module"
+Upload Speed: "921600"
+CPU Frequency: "240MHz (WiFi/BT)"
+Flash Frequency: "80MHz"
+Flash Mode: "QIO"
+Flash Size: "4MB (32Mb)"
+Partition Scheme: "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)"
+Core Debug Level: "None"
+PSRAM: "Disabled"
+```
+
+## Sensor Compatibility
+
+### DHT22 Sensor
+- **Operating Voltage**: 3.3V-5V
+- **Temperature Range**: -40°C to +80°C
+- **Humidity Range**: 0-100% RH
+- **Accuracy**: ±0.5°C, ±2% RH
+- **Sampling Rate**: 0.5Hz (2 seconds)
+
+### Soil Moisture Sensor
+- **Operating Voltage**: 3.3V-5V
+- **Output**: Analog (0-4095 for ESP32)
+- **Response Time**: <1 second
+- **Operating Temperature**: -40°C to +85°C
+
+## Troubleshooting
+
+### Library Conflicts
+- หากมี library conflicts ให้ uninstall libraries เก่าก่อน
+- ตรวจสอบ version compatibility
+- ใช้ library manager แทนการดาวน์โหลด manual
+
+### ESP32 Board Not Found
+1. เพิ่ม ESP32 board URL ใน Preferences
+2. URL: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+3. ติดตั้ง ESP32 board package
+
+### DHT22 Not Working
+1. ตรวจสอบการเชื่อมต่อ VCC, GND, DATA
+2. ตรวจสอบแรงดันไฟฟ้า 3.3V
+3. ตรวจสอบ library DHT sensor
+4. ตรวจสอบ pull-up resistor (ถ้าจำเป็น)
+
+### Compilation Errors
+1. ตรวจสอบ library versions
+2. ตรวจสอบ board settings
+3. ตรวจสอบ include statements
+4. ตรวจสอบ syntax errors
+
+## Alternative Libraries
+
+### If DHT sensor library Doesn't Work
+```cpp
+// ใช้ SimpleDHT library แทน
+#include <SimpleDHT.h>
+SimpleDHT22 dht22;
+```
+
+### If ArduinoJson Doesn't Work
+```cpp
+// ใช้ manual JSON parsing
+// หรือใช้ String manipulation
+```
+
+## Version Compatibility
+
+### Tested Versions
+- Arduino IDE: 2.0+
+- ESP32 Board Package: 2.0.0+
+- DHT sensor library: 1.4.4
+- ArduinoJson: 6.21.3
+
+### Minimum Requirements
+- Arduino IDE: 1.8.0+
+- ESP32 Board Package: 1.0.0+
+- DHT sensor library: 1.0.0+
+- ArduinoJson: 6.0.0+
+
+## Additional Libraries (Optional)
+
+### For Advanced Features
+- **RTClib**: สำหรับ Real-time Clock (ถ้าต้องการ)
+- **ESP32Servo**: สำหรับ Servo control (ถ้าต้องการ)
+- **WiFiManager**: สำหรับ WiFi configuration (ถ้าต้องการ)
+
+## Notes
+
+- ตรวจสอบ library updates เป็นประจำ
+- Backup โปรเจคก่อน update libraries
+- ทดสอบโค้ดหลัง update libraries
+- ใช้ library manager แทนการดาวน์โหลด manual
+- ตรวจสอบ sensor compatibility
+
+---
+
+**สร้างโดย เนย - Senior Developer** 🌟 
