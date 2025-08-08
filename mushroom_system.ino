@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
 
 // Mushroom Configuration
 RTC_DS3231 rtc;
@@ -20,6 +21,16 @@ const char* ssid = "YOUR_WIFI_SSID";
 const char* password = "YOUR_WIFI_PASSWORD";
 const char* webhookUrl = "YOUR_WEBHOOK_URL";
 bool webhookEnabled = true;
+
+void sendWebhook(String message, String level) {
+  if (!webhookEnabled || WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.begin(webhookUrl);
+  http.addHeader("Content-Type", "application/json");
+  String payload = String("{\"message\":\"") + message + "\",\"level\":\"" + level + "\"}";
+  http.POST(payload);
+  http.end();
+}
 
 // System variables
 WebServer server(80);
@@ -198,6 +209,7 @@ void startWatering(int relayIndex, int duration) {
     Serial.print(" for ");
     Serial.print(duration);
     Serial.println(" minutes");
+    sendWebhook("🍄 Bed " + String(relayIndex + 1) + " watering started (" + String(duration) + " min)", "info");
   }
 }
 
@@ -208,6 +220,7 @@ void stopWatering(int relayIndex) {
     
     Serial.print("🍄 Stopped watering Bed ");
     Serial.println(relayIndex + 1);
+    sendWebhook("🛑 Bed " + String(relayIndex + 1) + " watering completed", "info");
   }
 }
 
@@ -510,5 +523,37 @@ void setupWebServer() {
     }
     
     server.send(200, "application/json", "{\"status\":\"harvested\"}");
+  });
+  
+  // Blink App compatible endpoints
+  server.on("/api/blink/water", HTTP_POST, []() {
+    int zone = 0;
+    int duration = 5; // minutes
+    if (server.hasArg("zone")) {
+      zone = server.arg("zone").toInt();
+    }
+    if (server.hasArg("duration")) {
+      duration = server.arg("duration").toInt();
+    }
+    if (zone >= 0 && zone < RELAY_COUNT) {
+      startWatering(zone, duration);
+      server.send(200, "application/json", "{\"status\":\"watering_started\",\"zone\":" + String(zone) + "}");
+    } else {
+      server.send(400, "application/json", "{\"status\":\"invalid_zone\"}");
+    }
+  });
+  
+  server.on("/api/blink/status", HTTP_GET, []() {
+    StaticJsonDocument<512> doc;
+    JsonArray beds = doc.createNestedArray("beds");
+    for (int i = 0; i < RELAY_COUNT; i++) {
+      JsonObject bed = beds.createNestedObject();
+      bed["watering"] = relayStates[i];
+      bed["humidity"] = moisturePercent[i];
+      bed["temperature"] = mushroomBeds[i].temperature;
+    }
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
   });
 } 

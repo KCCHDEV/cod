@@ -15,6 +15,7 @@
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
+#include <HTTPClient.h>
 
 // RTC Configuration
 RTC_DS3231 rtc;
@@ -87,6 +88,20 @@ const int MAX_DAILY_FOOD = 6;
 // Last action times
 DateTime lastWaterTime;
 DateTime lastFoodTime;
+
+// Webhook Configuration
+const char* webhookUrl = "YOUR_WEBHOOK_URL";
+bool webhookEnabled = true;
+
+void sendWebhook(String message, String level) {
+  if (!webhookEnabled || WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.begin(webhookUrl);
+  http.addHeader("Content-Type", "application/json");
+  String payload = String("{\"message\":\"") + message + "\",\"level\":\"" + level + "\"}";
+  http.POST(payload);
+  http.end();
+}
 
 void setup() {
   Serial.begin(115200);
@@ -187,6 +202,7 @@ void startWaterPump(int duration) {
     digitalWrite(RELAY_PIN, LOW); // Turn on relay
     waterPumpActive = true;
     waterPumpStartTime = millis();
+    sendWebhook("💧 Water pump started (" + String(duration) + " s)", "info");
   }
 }
 
@@ -195,6 +211,7 @@ void stopWaterPump() {
     digitalWrite(RELAY_PIN, HIGH); // Turn off relay
     waterPumpActive = false;
     Serial.println("💧 Water pump stopped");
+    sendWebhook("🛑 Water pump stopped", "info");
   }
 }
 
@@ -206,6 +223,7 @@ void dispenseFood(int amount) {
     // เปิดถาดอาหาร
     foodServo.write(SERVO_OPEN_ANGLE);
     Serial.println("🌾 Food dispenser opened");
+    sendWebhook("🌾 Food dispenser opened (" + String(amount) + "x)", "info");
   }
 }
 
@@ -214,6 +232,7 @@ void closeFoodDispenser() {
     foodServo.write(SERVO_CLOSE_ANGLE);
     foodDispenserActive = false;
     Serial.println("🌾 Food dispenser closed");
+    sendWebhook("🌾 Food dispenser closed", "info");
   }
 }
 

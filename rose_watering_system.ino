@@ -861,4 +861,38 @@ void setupWebServer() {
     
     server.send(200, "application/json", "{\"status\":\"blink_test_completed\"}");
   });
+  
+  // Blink App compatible endpoints
+  server.on("/api/blink/water", HTTP_POST, []() {
+    int zone = 0;
+    int duration = 5; // minutes
+    if (server.hasArg("zone")) {
+      zone = server.arg("zone").toInt();
+    }
+    if (server.hasArg("duration")) {
+      duration = server.arg("duration").toInt();
+    }
+    if (zone >= 0 && zone < RELAY_COUNT) {
+      startWatering(zone, duration);
+      server.send(200, "application/json", "{\"status\":\"watering_started\",\"zone\":" + String(zone) + "}");
+    } else {
+      server.send(400, "application/json", "{\"status\":\"invalid_zone\"}");
+    }
+  });
+  
+  server.on("/api/blink/status", HTTP_GET, []() {
+    StaticJsonDocument<512> doc;
+    doc["blink_connected"] = !blinkAuthToken.isEmpty();
+    JsonArray relays = doc.createNestedArray("relays");
+    for (int i = 0; i < RELAY_COUNT; i++) {
+      JsonObject r = relays.createNestedObject();
+      r["index"] = i;
+      r["active"] = relayStates[i];
+      r["today"] = wateringCount[i];
+      r["moisture"] = moisturePercent[i];
+    }
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
+  });
 }
