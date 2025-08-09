@@ -13,6 +13,7 @@
 #include <ArduinoJson.h>
 #include <DHT.h>
 #include <RTClib.h>
+#include <HTTPClient.h>
 
 // DHT22 Configuration
 #define DHT_PIN 4
@@ -69,6 +70,20 @@ float temperature = 0;
 float humidity = 0;
 int soilMoisture = 0;
 bool soilIsDry = false;
+
+// Webhook Configuration
+const char* webhookUrl = "YOUR_WEBHOOK_URL";
+bool webhookEnabled = true;
+
+void sendWebhook(String message, String level) {
+  if (!webhookEnabled || WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.begin(webhookUrl);
+  http.addHeader("Content-Type", "application/json");
+  String payload = String("{\"message\":\"") + message + "\",\"level\":\"" + level + "\"}";
+  http.POST(payload);
+  http.end();
+}
 
 void setup() {
   Serial.begin(115200);
@@ -202,6 +217,7 @@ void startWaterPump(int duration) {
     digitalWrite(RELAY_PIN, LOW);
     waterPumpActive = true;
     waterPumpStartTime = millis();
+    sendWebhook("🍅 Water pump started (" + String(duration) + " s)", "info");
   }
 }
 
@@ -210,6 +226,7 @@ void stopWaterPump() {
     digitalWrite(RELAY_PIN, HIGH);
     waterPumpActive = false;
     Serial.println("💧 Water pump stopped");
+    sendWebhook("🛑 Water pump stopped", "info");
   }
 }
 
@@ -229,6 +246,7 @@ void resetDailyCounters() {
     dailyWaterCount = 0;
     lastDay = now.day();
     Serial.println("🔄 Daily counters reset");
+    sendWebhook("🔄 Daily counters reset", "info");
   }
 }
 
