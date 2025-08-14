@@ -30,6 +30,7 @@ Built-in Libraries (no installation needed):
 
 Removed Libraries (no longer needed):
 - DHT sensor library (DHT22 sensor removed)
+- Light sensor library (LDR sensor removed)
 
 Installation Steps:
 ==================
@@ -104,8 +105,9 @@ System Features:
 
 1. Removed Components:
    - DHT22 temperature/humidity sensor
-   - All temperature-based logic
-   - Temperature display in web interface
+   - Light sensor (LDR/Photoresistor)
+   - All temperature and light-based logic
+   - Temperature and light level display in web interface
 
 2. Enhanced Features:
    - WiFi Manager captive portal
@@ -113,12 +115,14 @@ System Features:
    - EEPROM storage for settings
    - WiFi signal strength monitoring
    - System uptime display
+   - Current time display
 
 3. New Web Interface:
-   - Simplified sensor display (light level only)
+   - Simplified sensor display (soil moisture only)
    - Blink configuration modal
    - WiFi reset functionality
    - Enhanced system status
+   - Time-based watering logic
 
 Usage Instructions:
 ==================
@@ -172,7 +176,6 @@ Hardware Connections:
 ESP32 Pin Connections:
 - GPIO 5, 18, 19: Relay outputs (zones 1-3)
 - GPIO 36, 39, 34: Soil moisture sensors (zones 1-3)
-- GPIO 35: Light level sensor (LDR)
 - GPIO 2: Status LED
 - GPIO 21: Optional flow sensor
 - GPIO 0: Boot button (WiFi reset)
@@ -182,6 +185,6 @@ Power Requirements:
 - ESP32: 3.3V
 - Relays: 5V (with optocouplers)
 - Sensors: 3.3V
-- Total current: ~500mA (without pumps)
+- Total current: ~400mA (without pumps)
 
-Note: DHT22 sensor pin (GPIO 4) is now free for other uses.
+Note: GPIO 4 and GPIO 35 are now free for other uses (DHT22 and light sensor removed).

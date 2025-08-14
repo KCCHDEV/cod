@@ -1,22 +1,22 @@
 ESP32 Cilantro Watering System - Wiring Diagram (WiFi Manager Version)
 ====================================================================
 
-🌿 UPDATED SYSTEM - DHT22 SENSOR REMOVED
+🌿 UPDATED SYSTEM - DHT22 & LIGHT SENSORS REMOVED
 - WiFi Manager for easy network configuration
 - Blink Camera integration via web interface
-- Simplified sensor setup (soil moisture + light only)
+- Simplified sensor setup (soil moisture only)
 
 Hardware Components:
 ===================
 ✅ ESP32 Development Board
 ✅ DS3231 RTC Module
 ✅ 3x Soil Moisture Sensors
-✅ 1x Light Sensor (LDR/Photoresistor)
 ✅ 3x Relay Modules (5V with optocouplers)
 ✅ 3x Water Pumps (12V/5V)
 ✅ Status LED
 ✅ Optional: Flow Sensor
 ❌ DHT22 Sensor (REMOVED)
+❌ Light Sensor/LDR (REMOVED)
 
 Pin Connections:
 ===============
@@ -43,7 +43,7 @@ GPIO 23 ──────── RTC SCL (I2C Clock)
 Analog Pins:
 -----------
 GPIO 34 ──────── Soil Moisture Sensor 3 (Analog Output)
-GPIO 35 ──────── Light Sensor (LDR middle pin)
+GPIO 35 ──────── [FREE PIN - LIGHT SENSOR REMOVED]
 GPIO 36 ──────── Soil Moisture Sensor 1 (Analog Output)
 GPIO 39 ──────── Soil Moisture Sensor 2 (Analog Output)
 
@@ -71,10 +71,9 @@ Sensor 3 (Zone 3):
   GND ────── ESP32 GND
   A0  ────── ESP32 GPIO 34
 
-Light Sensor (LDR):
-------------------
-LDR ──────── ESP32 GPIO 35 ──────── 10kΩ Resistor ──────── ESP32 GND
-     └────── ESP32 3.3V
+Light Sensor (LDR): [REMOVED]
+-------------------
+No longer needed - time-based watering logic used instead
 
 Relay Modules (x3):
 ------------------
@@ -133,7 +132,6 @@ Voltage Levels:
 ==============
 - ESP32 Logic: 3.3V
 - Soil Sensors: 3.3V  
-- Light Sensor: 3.3V
 - RTC Module: 3.3V
 - Relay Modules: 5V logic (3.3V compatible)
 - Water Pumps: 12V
@@ -190,9 +188,9 @@ Water Safety:
 
 Component Protection:
 - Add 220Ω resistor for status LED
-- Use 10kΩ pull-down resistor for light sensor
 - Ensure relay modules can handle pump current
 - Add flyback diodes across pump motors
+- Proper grounding for all components
 
 Installation Tips:
 =================
@@ -200,10 +198,9 @@ Installation Tips:
 1. Mount ESP32 in weatherproof enclosure
 2. Use shielded cable for long sensor runs
 3. Install sensors at appropriate soil depth (2-3 inches)
-4. Position light sensor for representative readings
-5. Ensure reliable WiFi signal at installation location
-6. Test all connections before final installation
-7. Configure system indoors before outdoor deployment
+4. Ensure reliable WiFi signal at installation location
+5. Test all connections before final installation
+6. Configure system indoors before outdoor deployment
 
 Troubleshooting Connections:
 ===========================
@@ -215,7 +212,7 @@ No WiFi Connection:
 
 Sensors Not Reading:
 - Verify 3.3V power to all sensors
-- Check analog pin connections (36, 39, 34, 35)
+- Check analog pin connections (36, 39, 34)
 - Ensure proper grounding
 
 Relays Not Switching:
@@ -233,17 +230,18 @@ System Improvements:
 
 Available Pins for Future Expansion:
 - GPIO 4: [Free after DHT22 removal]
+- GPIO 35: [Free after light sensor removal]
 - GPIO 12, 13, 14, 15, 16, 17: Available for additional sensors
 - GPIO 25, 26, 27: Available for PWM control or additional analog inputs
 
 Possible Enhancements:
 - Add pH sensor on GPIO 4
+- Add temperature sensor (DS18B20) on GPIO 35
 - Add additional soil moisture sensors
 - Implement PWM pump speed control
 - Add rain sensor for automatic watering suspension
-- Add ambient temperature sensor (DS18B20)
-- Implement solar panel charging system
 - Add water level sensors for reservoir monitoring
+- Implement solar panel charging system
 
 Network Features:
 - OTA (Over-The-Air) updates

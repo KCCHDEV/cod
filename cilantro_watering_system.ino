@@ -29,7 +29,6 @@ RTC_DS3231 rtc;
 const int RELAY_COUNT = 3;
 const int relayPins[RELAY_COUNT] = {5, 18, 19}; // 3 zones for cilantro
 const int SOIL_MOISTURE_PINS[RELAY_COUNT] = {36, 39, 34};
-const int LIGHT_SENSOR_PIN = 35;
 const int STATUS_LED = 2;
 const int PUMP_FLOW_SENSOR = 21; // Optional flow sensor
 const int WIFI_RESET_BUTTON = 0; // Boot button for WiFi reset
@@ -65,12 +64,9 @@ unsigned long wateringEndTime[RELAY_COUNT] = {0, 0, 0};
 // Cilantro-specific settings
 const int CILANTRO_MOISTURE_MIN = 45; // ผักชีฟลั่งต้องการความชื้นปานกลาง
 const int CILANTRO_MOISTURE_MAX = 75;
-const int CILANTRO_LIGHT_MIN = 4;     // ต้องการแสงปานกลาง 4-6 ชั่วโมง
-const int CILANTRO_LIGHT_MAX = 6;
 
-// Environmental data (removed temperature and humidity)
+// Environmental data (removed temperature, humidity, and light level)
 int soilMoisture[RELAY_COUNT] = {0, 0, 0};
-int lightLevel = 0;
 float waterFlowRate = 0;
 
 // Blink authentication
@@ -306,10 +302,6 @@ void readAllSensors() {
     cilantroZones[i].currentMoisture = soilMoisture[i];
   }
   
-  // Read light level
-  lightLevel = analogRead(LIGHT_SENSOR_PIN);
-  lightLevel = map(lightLevel, 0, 4095, 0, 100);
-  
   // Log sensor data
   logSensorData();
 }
@@ -331,10 +323,12 @@ void smartCilantroWatering() {
       reason += "Low soil moisture (" + String(zone->currentMoisture) + "%). ";
     }
     
-    // Factor 2: Light level consideration (no temperature sensor)
-    if (lightLevel > 70 && zone->currentMoisture < zone->targetMoisture) {
+    // Factor 2: Time-based watering need (morning/evening preference)
+    DateTime now = rtc.now();
+    bool isDayTime = (now.hour() >= 8 && now.hour() <= 18);
+    if (isDayTime && zone->currentMoisture < zone->targetMoisture) {
       needsWater = true;
-      reason += "High light level stress (" + String(lightLevel) + "%). ";
+      reason += "Daytime watering need. ";
     }
     
     // Factor 3: Growth stage requirements
@@ -387,11 +381,12 @@ int calculateWateringDuration(int zoneIndex) {
   int moistureDeficit = zone->targetMoisture - zone->currentMoisture;
   float durationMultiplier = 1.0 + (moistureDeficit / 20.0); // +5% per 1% deficit
   
-  // Adjust based on light level (substitute for temperature)
-  if (lightLevel > 80) {
-    durationMultiplier *= 1.2; // 20% longer in high light
-  } else if (lightLevel < 30) {
-    durationMultiplier *= 0.8; // 20% shorter in low light
+  // Adjust based on time of day
+  DateTime now = rtc.now();
+  if (now.hour() >= 10 && now.hour() <= 16) {
+    durationMultiplier *= 1.1; // 10% longer during midday heat
+  } else if (now.hour() <= 6 || now.hour() >= 20) {
+    durationMultiplier *= 0.9; // 10% shorter during cool periods
   }
   
   // Adjust based on growth stage
@@ -603,7 +598,6 @@ String getCurrentTime() {
 
 void logSensorData() {
   Serial.println("📊 Sensor Data:");
-  Serial.println("  Light Level: " + String(lightLevel) + "%");
   
   for (int i = 0; i < RELAY_COUNT; i++) {
     Serial.println("  Zone " + String(i+1) + " Moisture: " + String(soilMoisture[i]) + "% - " + cilantroZones[i].status);
@@ -647,7 +641,7 @@ void handleStatus() {
   doc["timestamp"] = getCurrentTime();
   doc["temperature"] = 0; // Removed temperature
   doc["humidity"] = 0; // Removed humidity
-  doc["light_level"] = lightLevel;
+  doc["light_level"] = 0; // Removed light sensor
   doc["wifi_strength"] = WiFi.RSSI();
   doc["uptime"] = millis() / 1000;
   
@@ -899,10 +893,6 @@ String generateMainPage() {
 
         <div class="stats-grid">
             <div class="stat-card">
-                <h3>☀️ ระดับแสง</h3>
-                <div id="lightLevel">--%</div>
-            </div>
-            <div class="stat-card">
                 <h3>📷 Blink Status</h3>
                 <div id="blinkStatus">Disconnected</div>
             </div>
@@ -913,6 +903,10 @@ String generateMainPage() {
             <div class="stat-card">
                 <h3>⏱️ System Uptime</h3>
                 <div id="uptime">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>🕒 Current Time</h3>
+                <div id="currentTime">--:--</div>
             </div>
         </div>
 
@@ -955,10 +949,10 @@ String generateMainPage() {
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('lightLevel').textContent = data.light_level + '%';
                     document.getElementById('blinkStatus').textContent = data.blink_connected ? 'Connected' : 'Disconnected';
                     document.getElementById('wifiSignal').textContent = data.wifi_strength + ' dBm';
                     document.getElementById('uptime').textContent = formatUptime(data.uptime);
+                    document.getElementById('currentTime').textContent = data.timestamp.split(' ')[1];
                     
                     updateZones(data.zones);
                 });
