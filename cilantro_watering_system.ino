@@ -392,11 +392,11 @@ int calculateWateringDuration(int zoneIndex) {
 String getZoneStatus(int zoneIndex) {
   CilantroZone* zone = &cilantroZones[zoneIndex];
   
-  if (zone->currentMoisture >= zone->targetMoisture) {
+  if (zone->currentMoisture >= MOISTURE_THRESHOLD_HIGH) {
     return "Optimal";
-  } else if (zone->currentMoisture >= CILANTRO_MOISTURE_MIN) {
+  } else if (zone->currentMoisture >= 50) {
     return "Good";
-  } else if (zone->currentMoisture >= 30) {
+  } else if (zone->currentMoisture >= MOISTURE_THRESHOLD_LOW) {
     return "Dry";
   } else {
     return "Critical";
@@ -484,7 +484,7 @@ void sendWebhook(String message, String level) {
   doc["system"] = "Simple Cilantro Watering System";
   doc["message"] = message;
   doc["level"] = level;
-  doc["ip"] = WiFi.localIP().toString()
+  doc["ip"] = WiFi.localIP().toString();
   
   JsonArray moistures = doc.createNestedArray("soil_moisture");
   for (int i = 0; i < RELAY_COUNT; i++) {
