@@ -1,0 +1,72 @@
+ระบบรดน้ำผักชีฟลั่ง - MH Sensor (เซ็นเซอร์เดียว)
+==================================================
+
+ESP32 Pin Configuration:
+------------------------
+GPIO 5  -> รีเลย์ปั๊มน้ำ (RELAY_PIN)
+GPIO 36 -> MH Sensor AO (Analog Output)
+GPIO 35 -> MH Sensor DO (Digital Output) 
+GPIO 2  -> LED สถานะ (STATUS_LED)
+GPIO 0  -> ปุ่มรีเซ็ต WiFi (WIFI_RESET_BUTTON)
+GPIO 21 -> SDA (สำหรับ RTC - ถ้ามี)
+GPIO 22 -> SCL (สำหรับ RTC - ถ้ามี)
+
+Hardware Connections:
+--------------------
+
+1. MH Sensor (Soil Moisture Sensor):
+   VCC -> 3.3V หรือ 5V
+   GND -> GND
+   AO  -> GPIO 36 (ESP32)
+   DO  -> GPIO 35 (ESP32)
+
+2. Relay Module:
+   VCC -> 5V (หรือตามที่รีเลย์รองรับ)
+   GND -> GND
+   IN  -> GPIO 5 (ESP32)
+   COM -> แหล่งจ่ายไฟปั๊มน้ำ (12V+)
+   NO  -> ปั๊มน้ำ (12V+)
+
+3. Water Pump:
+   + -> รีเลย์ NO (Normally Open)
+   - -> แหล่งจ่ายไฟ GND (12V-)
+
+4. Status LED:
+   + -> GPIO 2 (ESP32)
+   - -> GND (ผ่านตัวต้านทาน 220Ω)
+
+5. WiFi Reset Button:
+   ขาหนึ่ง -> GPIO 0 (ESP32)
+   อีกขา -> GND
+
+6. RTC DS3231 (ถ้ามี - ไม่บังคับ):
+   VCC -> 3.3V
+   GND -> GND
+   SDA -> GPIO 21 (ESP32)
+   SCL -> GPIO 22 (ESP32)
+
+Power Supply:
+-------------
+- ESP32: 5V หรือ 3.3V
+- Relay: 5V (ตามที่รีเลย์รองรับ)
+- Water Pump: 12V DC (หรือตามที่ปั๊มรองรับ)
+- MH Sensor: 3.3V หรือ 5V
+
+System Logic:
+------------
+- รดน้ำเมื่อความชื้น < 30%
+- หยุดรดน้ำเมื่อความชื้นถึง 70%
+- ป้องกันการรดน้ำบ่อยเกินไป (ห่างกัน 30 นาที)
+- จำกัดการรดน้ำวันละ 6 ครั้ง
+
+Available Pins (สำหรับขยายระบบ):
+-------------------------------
+GPIO 4, GPIO 12, GPIO 13, GPIO 14, GPIO 15, GPIO 16, GPIO 17, GPIO 18, GPIO 19, GPIO 23, GPIO 25, GPIO 26, GPIO 27, GPIO 32, GPIO 33
+
+Notes:
+------
+1. MH Sensor จะให้ค่า Analog (0-4095) ที่ AO pin
+2. DO pin จะเป็น Digital (HIGH/LOW) ตามค่าที่ตั้งไว้ที่ potentiometer บน sensor
+3. ค่า AO น้อย = ดินแห้ง, ค่า AO มาก = ดินชื้น
+4. ระบบจะแปลงค่า analog เป็นเปอร์เซ็นต์ความชื้น (0-100%)
+5. ถ้าไม่มี RTC ระบบจะใช้ uptime แทนเวลาจริง

@@ -26,9 +26,11 @@ RTC_DS3231 rtc;
 bool rtcAvailable = false;
 
 // Relay and Sensor Pins
-const int RELAY_COUNT = 3;
-const int relayPins[RELAY_COUNT] = {5, 18, 19}; // 3 zones for cilantro
-const int SOIL_MOISTURE_PINS[RELAY_COUNT] = {36, 39, 34};
+const int RELAY_COUNT = 1; // ใช้เซ็นเซอร์ตัวเดียว
+const int relayPins[RELAY_COUNT] = {5}; // รีเลย์ควบคุมปั๊มน้ำ
+// MH Sensor Pins
+const int MH_SENSOR_AO = 36; // ขา AO (Analog Output) ต่อกับ GPIO 36
+const int MH_SENSOR_DO = 35; // ขา DO (Digital Output) ต่อกับ GPIO 35
 const int STATUS_LED = 2;
 const int PUMP_FLOW_SENSOR = 21; // Optional flow sensor
 const int WIFI_RESET_BUTTON = 0; // Boot button for WiFi reset
@@ -43,18 +45,19 @@ bool webhookEnabled = false;
 
 // System variables
 WebServer server(80);
-bool relayStates[RELAY_COUNT] = {false, false, false};
-int wateringCount[RELAY_COUNT] = {0, 0, 0};
-unsigned long lastWateringTime[RELAY_COUNT] = {0, 0, 0};
-unsigned long wateringEndTime[RELAY_COUNT] = {0, 0, 0};
+bool relayStates[RELAY_COUNT] = {false};
+int wateringCount[RELAY_COUNT] = {0};
+unsigned long lastWateringTime[RELAY_COUNT] = {0};
+unsigned long wateringEndTime[RELAY_COUNT] = {0};
 
-// Cilantro-specific settings
-const int CILANTRO_MOISTURE_MIN = 45; // ผักชีฟลั่งต้องการความชื้นปานกลาง
-const int CILANTRO_MOISTURE_MAX = 75;
+// MH Sensor settings
+const int MOISTURE_THRESHOLD_LOW = 30;  // รดน้ำเมื่อความชื้นต่ำกว่า 30%
+const int MOISTURE_THRESHOLD_HIGH = 70; // หยุดรดน้ำเมื่อความชื้นถึง 70%
 
 // Environmental data (removed temperature, humidity, and light level)
-int soilMoisture[RELAY_COUNT] = {0, 0, 0};
+int soilMoisture[RELAY_COUNT] = {0};
 float waterFlowRate = 0;
+int moisturePercent = 0; // ความชื้นเป็นเปอร์เซ็นต์
 
 // Advanced watering logic
 struct CilantroZone {
@@ -70,9 +73,7 @@ struct CilantroZone {
 };
 
 CilantroZone cilantroZones[RELAY_COUNT] = {
-  {0, "Zone 1 - Seedling", 50, 65, 5, false, 0, 0.2, "Growing"},
-  {1, "Zone 2 - Growing", 45, 60, 7, false, 0, 0.6, "Healthy"},
-  {2, "Zone 3 - Mature", 40, 55, 8, false, 0, 0.9, "Ready"}
+  {0, "ผักชีฟลั่ง", 50, MOISTURE_THRESHOLD_HIGH, 5, false, 0, 0.5, "Growing"}
 };
 
 // Watering schedules for cilantro (early morning and evening)
@@ -85,12 +86,8 @@ struct WateringSchedule {
 };
 
 WateringSchedule cilantroSchedules[] = {
-  {6, 0, 0, 3, true},   // Zone 1 - 6:00 AM
-  {6, 5, 1, 5, true},   // Zone 2 - 6:05 AM  
-  {6, 10, 2, 7, true},  // Zone 3 - 6:10 AM
-  {18, 0, 0, 2, true},  // Zone 1 - 6:00 PM
-  {18, 5, 1, 4, true},  // Zone 2 - 6:05 PM
-  {18, 10, 2, 5, true}  // Zone 3 - 6:10 PM
+  {6, 0, 0, 3, true},   // ผักชีฟลั่ง - 6:00 AM
+  {18, 0, 0, 3, true}   // ผักชีฟลั่ง - 6:00 PM
 };
 
 // Callback function for saving WiFi config
@@ -131,6 +128,10 @@ void setup() {
   pinMode(STATUS_LED, OUTPUT);
   pinMode(PUMP_FLOW_SENSOR, INPUT_PULLUP);
   pinMode(WIFI_RESET_BUTTON, INPUT_PULLUP);
+  
+  // Configure MH Sensor pins
+  pinMode(MH_SENSOR_AO, INPUT);  // Analog input สำหรับขา AO
+  pinMode(MH_SENSOR_DO, INPUT);  // Digital input สำหรับขา DO
   
   // Initialize sensors
   Wire.begin();
@@ -289,89 +290,69 @@ void loop() {
 }
 
 void readAllSensors() {
-  // Read soil moisture for each zone
-  for (int i = 0; i < RELAY_COUNT; i++) {
-    int rawValue = analogRead(SOIL_MOISTURE_PINS[i]);
-    soilMoisture[i] = map(rawValue, 4095, 0, 0, 100); // Convert to percentage
-    cilantroZones[i].currentMoisture = soilMoisture[i];
-  }
+  // Read MH Sensor (single sensor for all zones)
+  int rawValue = analogRead(MH_SENSOR_AO); // อ่านค่า analog จากขา AO
+  bool digitalValue = digitalRead(MH_SENSOR_DO); // อ่านค่า digital จากขา DO
+  
+  // แปลงค่า analog เป็นเปอร์เซ็นต์ความชื้น
+  // MH Sensor: ค่าต่ำ = ดินแห้ง, ค่าสูง = ดินชื้น
+  moisturePercent = map(rawValue, 4095, 0, 0, 100); // 4095 = แห้งสุด, 0 = ชื้นสุด
+  
+  // อัพเดทข้อมูลให้ zone เดียว
+  soilMoisture[0] = moisturePercent;
+  cilantroZones[0].currentMoisture = moisturePercent;
+  
+  Serial.print("🌡️ MH Sensor - AO: ");
+  Serial.print(rawValue);
+  Serial.print(" (");
+  Serial.print(moisturePercent);
+  Serial.print("%) DO: ");
+  Serial.println(digitalValue ? "DRY" : "WET");
   
   // Log sensor data
   logSensorData();
 }
 
 void smartCilantroWatering() {
-  for (int i = 0; i < RELAY_COUNT; i++) {
-    CilantroZone* zone = &cilantroZones[i];
-    
-    // Skip if currently watering
-    if (relayStates[i]) continue;
-    
-    // Check if zone needs water based on multiple factors
-    bool needsWater = false;
-    String reason = "";
-    
-    // Factor 1: Soil moisture
-    if (zone->currentMoisture < CILANTRO_MOISTURE_MIN) {
-      needsWater = true;
-      reason += "Low soil moisture (" + String(zone->currentMoisture) + "%). ";
-    }
-    
-    // Factor 2: Time-based watering need (morning/evening preference)
-    if (rtcAvailable) {
-      DateTime now = rtc.now();
-      bool isDayTime = (now.hour() >= 8 && now.hour() <= 18);
-      if (isDayTime && zone->currentMoisture < zone->targetMoisture) {
-        needsWater = true;
-        reason += "Daytime watering need. ";
-      }
-    } else {
-      // Fallback: use millis-based timing (every 2 hours)
-      unsigned long timeSinceWatering = millis() - zone->lastWatered;
-      if (timeSinceWatering > 7200000 && zone->currentMoisture < zone->targetMoisture) { // 2 hours
-        needsWater = true;
-        reason += "Time-based watering (no RTC). ";
-      }
-    }
-    
-    // Factor 3: Growth stage requirements
-    float moistureAdjustment = zone->growthStage * 10; // Mature plants need less water
-    int adjustedTarget = zone->targetMoisture - moistureAdjustment;
-    if (zone->currentMoisture < adjustedTarget) {
-      needsWater = true;
-      reason += "Growth stage requirement. ";
-    }
-    
-    // Factor 4: Time since last watering
-    unsigned long timeSinceWatering = millis() - zone->lastWatered;
-    if (timeSinceWatering > 3600000 && zone->currentMoisture < zone->targetMoisture) { // 1 hour
-      needsWater = true;
-      reason += "Extended dry period. ";
-    }
-    
-    // Factor 5: Prevent overwatering
-    if (timeSinceWatering < 1800000) { // 30 minutes
-      needsWater = false;
-      reason = "Recently watered, skipping.";
-    }
-    
-    // Factor 6: Daily watering limit
-    if (wateringCount[i] >= 8) { // Max 8 times per day
-      needsWater = false;
-      reason = "Daily watering limit reached.";
-    }
-    
-    // Execute watering if needed
-    if (needsWater) {
-      int duration = calculateWateringDuration(i);
-      startWatering(i, duration);
-      Serial.println("🌿 Zone " + String(i+1) + " watering started: " + reason);
-      sendWebhook("🌿 Cilantro Zone " + String(i+1) + " watering: " + reason, "info");
-    }
-    
-    zone->needsWater = needsWater;
-    zone->status = needsWater ? "Watering" : getZoneStatus(i);
+  // ใช้เซ็นเซอร์ตัวเดียว - ตรวจสอบความชื้นและรดน้ำตามเงื่อนไข
+  CilantroZone* zone = &cilantroZones[0];
+  
+  // Skip if currently watering
+  if (relayStates[0]) return;
+  
+  // ตรวจสอบว่าต้องรดน้ำหรือไม่
+  bool needsWater = false;
+  String reason = "";
+  
+  // เงื่อนไขการรดน้ำ: ความชื้นต่ำกว่า 30%
+  if (moisturePercent < MOISTURE_THRESHOLD_LOW) {
+    needsWater = true;
+    reason += "ความชื้นต่ำ (" + String(moisturePercent) + "% < " + String(MOISTURE_THRESHOLD_LOW) + "%). ";
   }
+    
+  // ป้องกันการรดน้ำบ่อยเกินไป (ห่างกัน 30 นาที)
+  unsigned long timeSinceWatering = millis() - zone->lastWatered;
+  if (timeSinceWatering < 1800000) { // 30 minutes
+    needsWater = false;
+    reason = "เพิ่งรดน้ำไปแล้ว, รอก่อน.";
+  }
+  
+  // จำกัดการรดน้ำต่อวัน (สูงสุด 6 ครั้ง/วัน)
+  if (wateringCount[0] >= 6) {
+    needsWater = false;
+    reason = "รดน้ำครบจำนวนแล้ววันนี้.";
+  }
+  
+  // รดน้ำหากจำเป็น
+  if (needsWater) {
+    int duration = calculateWateringDuration(0);
+    startWatering(0, duration);
+    Serial.println("💧 เริ่มรดน้ำ: " + reason);
+    sendWebhook("💧 เริ่มรดน้ำผักชีฟลั่ง: " + reason, "info");
+  }
+  
+  zone->needsWater = needsWater;
+  zone->status = needsWater ? "กำลังรดน้ำ" : getZoneStatus(0);
 }
 
 int calculateWateringDuration(int zoneIndex) {
@@ -476,9 +457,15 @@ void stopWatering(int zoneIndex) {
 }
 
 void handleActiveWatering() {
-  for (int i = 0; i < RELAY_COUNT; i++) {
-    if (relayStates[i] && millis() >= wateringEndTime[i]) {
-      stopWatering(i);
+  // ตรวจสอบการรดน้ำที่กำลังทำงาน
+  if (relayStates[0]) {
+    // หยุดรดน้ำเมื่อ: 1) เวลาครบ หรือ 2) ความชื้นถึง 70%
+    if (millis() >= wateringEndTime[0] || moisturePercent >= MOISTURE_THRESHOLD_HIGH) {
+      if (moisturePercent >= MOISTURE_THRESHOLD_HIGH) {
+        Serial.println("💧 หยุดรดน้ำ: ความชื้นถึงเป้าหมาย " + String(moisturePercent) + "%");
+        sendWebhook("💧 หยุดรดน้ำ: ความชื้นถึง " + String(moisturePercent) + "%", "info");
+      }
+      stopWatering(0);
     }
   }
 }
@@ -576,7 +563,7 @@ void handleStatus() {
   doc["wifi_strength"] = WiFi.RSSI();
   doc["uptime"] = millis() / 1000;
   doc["free_memory"] = ESP.getFreeHeap();
-  doc["total_watering_today"] = wateringCount[0] + wateringCount[1] + wateringCount[2];
+  doc["total_watering_today"] = wateringCount[0];
   doc["rtc_available"] = rtcAvailable;
   
   JsonArray zones = doc.createNestedArray("zones");
@@ -807,9 +794,9 @@ String generateMainPage() {
 
         <div class="controls">
             <h3>🎛️ การควบคุม</h3>
-            <button onclick="manualWater(0, 3)">💧 รดน้ำโซน 1 (3 นาที)</button>
-            <button onclick="manualWater(1, 5)">💧 รดน้ำโซน 2 (5 นาที)</button>
-            <button onclick="manualWater(2, 7)">💧 รดน้ำโซน 3 (7 นาที)</button>
+            <button onclick="manualWater(0, 3)">💧 รดน้ำ 3 นาที</button>
+            <button onclick="manualWater(0, 5)">💧 รดน้ำ 5 นาที</button>
+            <button onclick="manualWater(0, 10)">💧 รดน้ำ 10 นาที</button>
             <button onclick="showSystemInfo()">📊 ข้อมูลระบบ</button>
             <button onclick="resetWiFi()" class="emergency">🔄 รีเซ็ต WiFi</button>
             <button onclick="emergencyStop()" class="emergency">🚨 หยุดฉุกเฉิน</button>
@@ -878,12 +865,12 @@ String generateMainPage() {
                     <div class="zone-card">
                         <h3>${zone.name}</h3>
                         <p><span class="status-indicator ${statusClass}"></span>${zone.status}</p>
-                        <p>ความชื้นดิน: ${zone.moisture}%</p>
+                        <p>ความชื้นดิน: <strong>${zone.moisture}%</strong></p>
                         <div class="progress-bar">
                             <div class="progress-fill" style="width: ${moisturePercent}%"></div>
                         </div>
-                        <p>เป้าหมาย: ${zone.target_moisture}%</p>
-                        <p>ระยะการเจริญเติบโต: ${(zone.growth_stage * 100).toFixed(0)}%</p>
+                        <p>🔴 รดน้ำเมื่อ: < 30%</p>
+                        <p>🟢 หยุดเมื่อ: 70%</p>
                         <p>จำนวนรดน้ำวันนี้: ${zone.watering_count} ครั้ง</p>
                         ${zone.watering ? '<p style="color: #4CAF50;">🚿 กำลังรดน้ำ...</p>' : ''}
                     </div>
