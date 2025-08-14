@@ -1,16 +1,15 @@
 /*
- * ระบบรดน้ำผักชีฟลั่งอัตโนมัติขั้นสูง (ปรับปรุงแล้ว)
- * ESP32 + RTC + Soil Moisture + Relay + Blink Camera + WiFi Manager
+ * ระบบรดน้ำผักชีฟลั่งอัตโนมัติ (เวอร์ชันเรียบง่าย)
+ * ESP32 + RTC + Soil Moisture + Relay + WiFi Manager
  * 
  * Features:
  * - รดน้ำอัตโนมัติตามความต้องการของผักชีฟลั่ง
- * - ตรวจวัดความชื้นดินและระดับแสง
- * - เชื่อมต่อ Blink Camera สำหรับการติดตาม
+ * - ตรวจวัดความชื้นดินเท่านั้น (เรียบง่าย)
  * - ระบบควบคุมปริมาณน้ำแบบแม่นยำ
  * - WiFi Manager สำหรับเลือกเครือข่าย WiFi ผ่าน Captive Portal
- * - Web Interface แบบ Responsive
- * - Webhook Notifications
- * - การปรับระบบตามสภาพอากาศ
+ * - Web Interface แบบ Responsive แสดงสถานะในเครื่อง
+ * - Webhook Notifications (ทางเลือก)
+ * - การรดน้ำตามเวลาที่เหมาะสม
  */
 
 #include <Wire.h>
@@ -37,22 +36,9 @@ const int WIFI_RESET_BUTTON = 0; // Boot button for WiFi reset
 WiFiManager wifiManager;
 bool shouldSaveConfig = false;
 
-// Blink Configuration (will be set via web interface)
-char blinkEmail[50] = "";
-char blinkPassword[50] = "";
-char blinkAccountId[50] = "";
-char blinkNetworkId[50] = "";
-char blinkCameraId[50] = "";
-
-// Webhook Configuration
+// Webhook Configuration (optional)
 char webhookUrl[200] = "";
 bool webhookEnabled = false;
-
-// Blink API endpoints
-const char* blinkAuthUrl = "https://rest-prod.immedia-semi.com/api/v5/account/login";
-const char* blinkCameraUrl = "https://rest-prod.immedia-semi.com/api/v1/networks/";
-const char* blinkArmUrl = "https://rest-prod.immedia-semi.com/api/v1/networks/";
-const char* blinkDisarmUrl = "https://rest-prod.immedia-semi.com/api/v1/networks/";
 
 // System variables
 WebServer server(80);
@@ -68,11 +54,6 @@ const int CILANTRO_MOISTURE_MAX = 75;
 // Environmental data (removed temperature, humidity, and light level)
 int soilMoisture[RELAY_COUNT] = {0, 0, 0};
 float waterFlowRate = 0;
-
-// Blink authentication
-String blinkAuthToken = "";
-unsigned long lastBlinkAuth = 0;
-const unsigned long BLINK_AUTH_INTERVAL = 3600000; // 1 hour
 
 // Advanced watering logic
 struct CilantroZone {
@@ -139,8 +120,8 @@ void setup() {
     while (1);
   }
   
-  // Load saved Blink configuration
-  loadBlinkConfig();
+  // Load saved configuration
+  loadConfig();
   
   // Check for WiFi reset button
   if (digitalRead(WIFI_RESET_BUTTON) == LOW) {
@@ -162,30 +143,21 @@ void setup() {
   Serial.print("✅ WiFi connected! IP: ");
   Serial.println(WiFi.localIP());
   
-  // Initialize Blink camera if credentials are available
-  if (strlen(blinkEmail) > 0 && strlen(blinkPassword) > 0) {
-    authenticateBlink();
-  }
-  
   // Setup web server
   setupWebServer();
   server.begin();
   Serial.println("🌐 Web server started");
-  Serial.println("🌿 Cilantro Watering System Ready!");
+  Serial.println("🌿 Simple Cilantro Watering System Ready!");
   
   // Send startup notification
-  sendWebhook("🌿 Cilantro Watering System Started (WiFi Manager Mode)", "info");
+  sendWebhook("🌿 Simple Cilantro Watering System Started", "info");
 }
 
 void setupWiFiManager() {
-  // WiFiManager custom parameters for Blink configuration
-  WiFiManagerParameter custom_blink_email("blink_email", "Blink Email", blinkEmail, 50);
-  WiFiManagerParameter custom_blink_password("blink_password", "Blink Password", blinkPassword, 50);
-  WiFiManagerParameter custom_webhook_url("webhook_url", "Webhook URL", webhookUrl, 200);
+  // WiFiManager custom parameters for webhook configuration
+  WiFiManagerParameter custom_webhook_url("webhook_url", "Webhook URL (Optional)", webhookUrl, 200);
   
   // Add parameters to WiFiManager
-  wifiManager.addParameter(&custom_blink_email);
-  wifiManager.addParameter(&custom_blink_password);
   wifiManager.addParameter(&custom_webhook_url);
   
   // Set callback to save custom parameters
@@ -204,41 +176,21 @@ void setupWiFiManager() {
   // Custom info
   String customInfo = "<p>🌿 ระบบรดน้ำผักชีฟลั่งอัตโนมัติ</p>";
   customInfo += "<p>📱 เชื่อมต่อกับ WiFi เพื่อใช้งานระบบ</p>";
-  customInfo += "<p>📷 สามารถเชื่อมต่อกับ Blink Camera ได้</p>";
+  customInfo += "<p>💧 ระบบเรียบง่าย ใช้งานง่าย</p>";
   wifiManager.setCustomHeadElement(customInfo.c_str());
 }
 
-void loadBlinkConfig() {
-  // Load Blink configuration from EEPROM
+void loadConfig() {
+  // Load configuration from EEPROM
   int address = 0;
-  EEPROM.get(address, blinkEmail);
-  address += sizeof(blinkEmail);
-  EEPROM.get(address, blinkPassword);
-  address += sizeof(blinkPassword);
-  EEPROM.get(address, blinkAccountId);
-  address += sizeof(blinkAccountId);
-  EEPROM.get(address, blinkNetworkId);
-  address += sizeof(blinkNetworkId);
-  EEPROM.get(address, blinkCameraId);
-  address += sizeof(blinkCameraId);
   EEPROM.get(address, webhookUrl);
   address += sizeof(webhookUrl);
   EEPROM.get(address, webhookEnabled);
 }
 
-void saveBlinkConfig() {
-  // Save Blink configuration to EEPROM
+void saveConfig() {
+  // Save configuration to EEPROM
   int address = 0;
-  EEPROM.put(address, blinkEmail);
-  address += sizeof(blinkEmail);
-  EEPROM.put(address, blinkPassword);
-  address += sizeof(blinkPassword);
-  EEPROM.put(address, blinkAccountId);
-  address += sizeof(blinkAccountId);
-  EEPROM.put(address, blinkNetworkId);
-  address += sizeof(blinkNetworkId);
-  EEPROM.put(address, blinkCameraId);
-  address += sizeof(blinkCameraId);
   EEPROM.put(address, webhookUrl);
   address += sizeof(webhookUrl);
   EEPROM.put(address, webhookEnabled);
@@ -278,8 +230,8 @@ void loop() {
   // Handle active watering
   handleActiveWatering();
   
-  // Check Blink connection
-  checkBlinkConnection();
+  // System status monitoring
+  // (No external services to check)
   
   // Handle web server
   server.handleClient();
@@ -437,9 +389,6 @@ void checkWateringSchedules(DateTime now) {
 void startWatering(int zoneIndex, int durationMinutes) {
   if (zoneIndex < 0 || zoneIndex >= RELAY_COUNT) return;
   
-  // Arm Blink camera for monitoring
-  armBlinkCamera();
-  
   digitalWrite(relayPins[zoneIndex], LOW); // Turn on relay (active LOW)
   relayStates[zoneIndex] = true;
   wateringEndTime[zoneIndex] = millis() + (durationMinutes * 60000UL);
@@ -461,9 +410,6 @@ void stopWatering(int zoneIndex) {
   
   Serial.println("🛑 Stopped watering Zone " + String(zoneIndex + 1));
   
-  // Disarm Blink camera
-  disarmBlinkCamera();
-  
   // Send webhook notification
   sendWebhook("🛑 Zone " + String(zoneIndex + 1) + " watering completed", "info");
 }
@@ -476,83 +422,7 @@ void handleActiveWatering() {
   }
 }
 
-// Blink Camera Integration
-void authenticateBlink() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  
-  HTTPClient http;
-  http.begin(blinkAuthUrl);
-  http.addHeader("Content-Type", "application/json");
-  
-  DynamicJsonDocument doc(256);
-  doc["email"] = blinkEmail;
-  doc["password"] = blinkPassword;
-  
-  String requestBody;
-  serializeJson(doc, requestBody);
-  
-  int httpCode = http.POST(requestBody);
-  
-  if (httpCode == 200) {
-    String response = http.getString();
-    DynamicJsonDocument responseDoc(1024);
-    deserializeJson(responseDoc, response);
-    
-    blinkAuthToken = responseDoc["auth"]["token"].as<String>();
-    lastBlinkAuth = millis();
-    Serial.println("✅ Blink authentication successful");
-    sendWebhook("📷 Blink camera connected successfully", "info");
-  } else {
-    Serial.print("❌ Blink authentication failed: ");
-    Serial.println(httpCode);
-  }
-  
-  http.end();
-}
 
-void checkBlinkConnection() {
-  if (millis() - lastBlinkAuth > BLINK_AUTH_INTERVAL) {
-    authenticateBlink();
-  }
-}
-
-void armBlinkCamera() {
-  if (blinkAuthToken.isEmpty() || WiFi.status() != WL_CONNECTED) return;
-  
-  HTTPClient http;
-  String url = blinkArmUrl + String(blinkNetworkId) + "/camera/" + String(blinkCameraId) + "/enable";
-  http.begin(url);
-  http.addHeader("TOKEN_AUTH", blinkAuthToken);
-  
-  int httpCode = http.POST("");
-  if (httpCode == 200) {
-    Serial.println("🔒 Blink camera armed for monitoring");
-  } else {
-    Serial.print("❌ Failed to arm Blink camera: ");
-    Serial.println(httpCode);
-  }
-  
-  http.end();
-}
-
-void disarmBlinkCamera() {
-  if (blinkAuthToken.isEmpty() || WiFi.status() != WL_CONNECTED) return;
-  
-  HTTPClient http;
-  String url = blinkDisarmUrl + String(blinkNetworkId) + "/camera/" + String(blinkCameraId) + "/disable";
-  http.begin(url);
-  http.addHeader("TOKEN_AUTH", blinkAuthToken);
-  
-  int httpCode = http.POST("");
-  if (httpCode == 200) {
-    Serial.println("🔓 Blink camera disarmed");
-  } else {
-    Serial.print("❌ Failed to disarm Blink camera: ");
-    Serial.println(httpCode);
-  }
-  
-  http.end();
-}
 
 void sendWebhook(String message, String level) {
   if (!webhookEnabled || WiFi.status() != WL_CONNECTED) return;
@@ -563,12 +433,10 @@ void sendWebhook(String message, String level) {
   
   DynamicJsonDocument doc(512);
   doc["timestamp"] = getCurrentTime();
-  doc["system"] = "Cilantro Watering System";
+  doc["system"] = "Simple Cilantro Watering System";
   doc["message"] = message;
   doc["level"] = level;
-  doc["ip"] = WiFi.localIP().toString();
-  doc["temperature"] = 0; // Removed temperature
-  doc["humidity"] = 0; // Removed humidity
+  doc["ip"] = WiFi.localIP().toString()
   
   JsonArray moistures = doc.createNestedArray("soil_moisture");
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -612,12 +480,7 @@ void setupWebServer() {
   server.on("/api/zones", handleZones);
   server.on("/api/schedule", HTTP_POST, handleScheduleUpdate);
   
-  // Blink integration endpoints
-  server.on("/api/blink/test", HTTP_POST, handleBlinkTest);
-  server.on("/api/blink/water", HTTP_POST, handleBlinkWater);
-  server.on("/api/blink/status", handleBlinkStatus);
-  
-  // Advanced endpoints
+  // System endpoints
   server.on("/api/settings", HTTP_POST, handleSettingsUpdate);
   server.on("/api/emergency", HTTP_POST, handleEmergencyStop);
   server.on("/api/wifi/reset", HTTP_POST, handleWiFiReset);
@@ -639,11 +502,10 @@ void handleRoot() {
 void handleStatus() {
   DynamicJsonDocument doc(2048);
   doc["timestamp"] = getCurrentTime();
-  doc["temperature"] = 0; // Removed temperature
-  doc["humidity"] = 0; // Removed humidity
-  doc["light_level"] = 0; // Removed light sensor
   doc["wifi_strength"] = WiFi.RSSI();
   doc["uptime"] = millis() / 1000;
+  doc["free_memory"] = ESP.getFreeHeap();
+  doc["total_watering_today"] = wateringCount[0] + wateringCount[1] + wateringCount[2];
   
   JsonArray zones = doc.createNestedArray("zones");
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -656,10 +518,11 @@ void handleStatus() {
     zone["status"] = cilantroZones[i].status;
     zone["growth_stage"] = cilantroZones[i].growthStage;
     zone["watering_count"] = wateringCount[i];
+    zone["last_watered"] = cilantroZones[i].lastWatered;
   }
   
-  doc["blink_connected"] = !blinkAuthToken.isEmpty();
   doc["webhook_enabled"] = webhookEnabled;
+  doc["system_status"] = "running";
   
   String response;
   serializeJson(doc, response);
@@ -704,42 +567,7 @@ void handleZones() {
   server.send(200, "application/json", response);
 }
 
-void handleBlinkTest() {
-  armBlinkCamera();
-  delay(2000);
-  disarmBlinkCamera();
-  server.send(200, "application/json", "{\"status\":\"blink_test_completed\"}");
-}
 
-void handleBlinkWater() {
-  int zone = 0; // Default to zone 0
-  if (server.hasArg("zone")) {
-    zone = server.arg("zone").toInt();
-  }
-  
-  if (zone >= 0 && zone < RELAY_COUNT) {
-    startWatering(zone, 3); // 3 minutes default
-    server.send(200, "application/json", "{\"status\":\"watering_started\",\"zone\":" + String(zone) + "}");
-  } else {
-    server.send(400, "application/json", "{\"error\":\"invalid_zone\"}");
-  }
-}
-
-void handleBlinkStatus() {
-  DynamicJsonDocument doc(512);
-  doc["blink_connected"] = !blinkAuthToken.isEmpty();
-  doc["camera_armed"] = false; // Would need to track this state
-  doc["system_status"] = "running";
-  doc["zones_watering"] = 0;
-  
-  for (int i = 0; i < RELAY_COUNT; i++) {
-    if (relayStates[i]) doc["zones_watering"] = doc["zones_watering"].as<int>() + 1;
-  }
-  
-  String response;
-  serializeJson(doc, response);
-  server.send(200, "application/json", response);
-}
 
 void handleEmergencyStop() {
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -754,28 +582,11 @@ void handleEmergencyStop() {
 
 void handleSettingsUpdate() {
   // Handle settings updates from web interface
-  // Save Blink config if changed
-  if (server.hasArg("blink_email") && server.hasArg("blink_password")) {
-    strncpy(blinkEmail, server.arg("blink_email").c_str(), sizeof(blinkEmail));
-    strncpy(blinkPassword, server.arg("blink_password").c_str(), sizeof(blinkPassword));
-    if (server.hasArg("blink_account_id")) {
-      strncpy(blinkAccountId, server.arg("blink_account_id").c_str(), sizeof(blinkAccountId));
-    }
-    if (server.hasArg("blink_network_id")) {
-      strncpy(blinkNetworkId, server.arg("blink_network_id").c_str(), sizeof(blinkNetworkId));
-    }
-    if (server.hasArg("blink_camera_id")) {
-      strncpy(blinkCameraId, server.arg("blink_camera_id").c_str(), sizeof(blinkCameraId));
-    }
-    saveBlinkConfig();
-    authenticateBlink(); // Re-authenticate with new credentials
-    sendWebhook("🔑 Blink credentials updated", "info");
-  }
   if (server.hasArg("webhook_url")) {
     strncpy(webhookUrl, server.arg("webhook_url").c_str(), sizeof(webhookUrl));
     webhookEnabled = server.arg("webhook_enabled").toInt();
-    saveBlinkConfig();
-    sendWebhook("🌐 Webhook URL updated", "info");
+    saveConfig();
+    sendWebhook("🌐 System settings updated", "info");
   }
   server.send(200, "application/json", "{\"status\":\"settings_updated\"}");
 }
@@ -887,15 +698,11 @@ String generateMainPage() {
     <div class="container">
         <div class="header">
             <h1>🌿 ระบบรดน้ำผักชีฟลั่งอัตโนมัติ</h1>
-            <p>Smart Cilantro Watering System with Blink Camera Integration</p>
-            <p><span class="status-indicator status-optimal"></span>Connected to Blink Security</p>
+            <p>Simple Cilantro Watering System - เรียบง่าย ใช้งานง่าย</p>
+            <p><span class="status-indicator status-optimal"></span>ระบบพร้อมใช้งาน</p>
         </div>
 
         <div class="stats-grid">
-            <div class="stat-card">
-                <h3>📷 Blink Status</h3>
-                <div id="blinkStatus">Disconnected</div>
-            </div>
             <div class="stat-card">
                 <h3>📶 WiFi Signal</h3>
                 <div id="wifiSignal">-- dBm</div>
@@ -908,6 +715,18 @@ String generateMainPage() {
                 <h3>🕒 Current Time</h3>
                 <div id="currentTime">--:--</div>
             </div>
+            <div class="stat-card">
+                <h3>💧 Total Watering Today</h3>
+                <div id="totalWatering">-- ครั้ง</div>
+            </div>
+            <div class="stat-card">
+                <h3>💾 Free Memory</h3>
+                <div id="freeMemory">-- KB</div>
+            </div>
+            <div class="stat-card">
+                <h3>🌐 System Status</h3>
+                <div id="systemStatus">--</div>
+            </div>
         </div>
 
         <div class="zones-grid" id="zonesContainer">
@@ -919,27 +738,29 @@ String generateMainPage() {
             <button onclick="manualWater(0, 3)">💧 รดน้ำโซน 1 (3 นาที)</button>
             <button onclick="manualWater(1, 5)">💧 รดน้ำโซน 2 (5 นาที)</button>
             <button onclick="manualWater(2, 7)">💧 รดน้ำโซน 3 (7 นาที)</button>
-            <button onclick="testBlinkCamera()">📷 ทดสอบ Blink Camera</button>
-            <button onclick="showBlinkConfig()">⚙️ ตั้งค่า Blink</button>
+            <button onclick="showSystemInfo()">📊 ข้อมูลระบบ</button>
             <button onclick="resetWiFi()" class="emergency">🔄 รีเซ็ต WiFi</button>
             <button onclick="emergencyStop()" class="emergency">🚨 หยุดฉุกเฉิน</button>
         </div>
 
-        <!-- Blink Configuration Modal -->
-        <div id="blinkModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
-            <div style="position:relative; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(255,255,255,0.95); padding:30px; border-radius:15px; max-width:500px; width:90%;">
-                <h2>⚙️ ตั้งค่า Blink Camera</h2>
-                <form id="blinkConfigForm">
-                    <p><label>Email:</label><br><input type="email" id="blinkEmailInput" style="width:100%; padding:8px; margin:5px 0;"></p>
-                    <p><label>Password:</label><br><input type="password" id="blinkPasswordInput" style="width:100%; padding:8px; margin:5px 0;"></p>
-                    <p><label>Account ID:</label><br><input type="text" id="blinkAccountIdInput" style="width:100%; padding:8px; margin:5px 0;"></p>
-                    <p><label>Network ID:</label><br><input type="text" id="blinkNetworkIdInput" style="width:100%; padding:8px; margin:5px 0;"></p>
-                    <p><label>Camera ID:</label><br><input type="text" id="blinkCameraIdInput" style="width:100%; padding:8px; margin:5px 0;"></p>
-                    <p><label>Webhook URL:</label><br><input type="url" id="webhookUrlInput" style="width:100%; padding:8px; margin:5px 0;"></p>
+        <!-- System Info Modal -->
+        <div id="systemModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+            <div style="position:relative; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(255,255,255,0.95); padding:30px; border-radius:15px; max-width:600px; width:90%;">
+                <h2>📊 ข้อมูลระบบ</h2>
+                <div id="systemInfoContent" style="text-align:left; line-height:1.8;">
+                    <p><strong>📶 WiFi:</strong> <span id="modalWifiSignal">--</span> dBm</p>
+                    <p><strong>💾 หน่วยความจำว่าง:</strong> <span id="modalFreeMemory">--</span> KB</p>
+                    <p><strong>⏱️ เวลาทำงาน:</strong> <span id="modalUptime">--</span></p>
+                    <p><strong>🌐 IP Address:</strong> <span id="modalIpAddress">--</span></p>
+                    <p><strong>💧 รดน้ำวันนี้:</strong> <span id="modalTotalWatering">--</span> ครั้ง</p>
+                    <p><strong>🕒 เวลาปัจจุบัน:</strong> <span id="modalCurrentTime">--</span></p>
+                    <hr>
+                    <h3>⚙️ ตั้งค่า Webhook (ทางเลือก)</h3>
+                    <p><label>Webhook URL:</label><br><input type="url" id="webhookUrlInput" style="width:100%; padding:8px; margin:5px 0;" placeholder="https://example.com/webhook"></p>
                     <p><label><input type="checkbox" id="webhookEnabledInput"> เปิดใช้ Webhook</label></p>
-                    <button type="button" onclick="saveBlinkConfig()" style="background:#4CAF50; color:white; padding:10px 20px; border:none; border-radius:5px; margin:5px;">💾 บันทึก</button>
-                    <button type="button" onclick="closeBlinkModal()" style="background:#f44336; color:white; padding:10px 20px; border:none; border-radius:5px; margin:5px;">❌ ยกเลิก</button>
-                </form>
+                </div>
+                <button type="button" onclick="saveSystemConfig()" style="background:#4CAF50; color:white; padding:10px 20px; border:none; border-radius:5px; margin:5px;">💾 บันทึก</button>
+                <button type="button" onclick="closeSystemModal()" style="background:#f44336; color:white; padding:10px 20px; border:none; border-radius:5px; margin:5px;">❌ ปิด</button>
             </div>
         </div>
     </div>
@@ -949,10 +770,12 @@ String generateMainPage() {
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('blinkStatus').textContent = data.blink_connected ? 'Connected' : 'Disconnected';
                     document.getElementById('wifiSignal').textContent = data.wifi_strength + ' dBm';
                     document.getElementById('uptime').textContent = formatUptime(data.uptime);
                     document.getElementById('currentTime').textContent = data.timestamp.split(' ')[1];
+                    document.getElementById('totalWatering').textContent = data.total_watering_today + ' ครั้ง';
+                    document.getElementById('freeMemory').textContent = Math.round(data.free_memory / 1024) + ' KB';
+                    document.getElementById('systemStatus').textContent = data.system_status === 'running' ? '🟢 ทำงานปกติ' : '🔴 ขัดข้อง';
                     
                     updateZones(data.zones);
                 });
@@ -1035,21 +858,26 @@ String generateMainPage() {
             }
         }
 
-        function showBlinkConfig() {
-            document.getElementById('blinkModal').style.display = 'block';
+        function showSystemInfo() {
+            // Update modal with current data
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('modalWifiSignal').textContent = data.wifi_strength;
+                    document.getElementById('modalFreeMemory').textContent = Math.round(data.free_memory / 1024);
+                    document.getElementById('modalUptime').textContent = formatUptime(data.uptime);
+                    document.getElementById('modalTotalWatering').textContent = data.total_watering_today;
+                    document.getElementById('modalCurrentTime').textContent = data.timestamp;
+                    document.getElementById('systemModal').style.display = 'block';
+                });
         }
 
-        function closeBlinkModal() {
-            document.getElementById('blinkModal').style.display = 'none';
+        function closeSystemModal() {
+            document.getElementById('systemModal').style.display = 'none';
         }
 
-        function saveBlinkConfig() {
+        function saveSystemConfig() {
             const formData = new FormData();
-            formData.append('blink_email', document.getElementById('blinkEmailInput').value);
-            formData.append('blink_password', document.getElementById('blinkPasswordInput').value);
-            formData.append('blink_account_id', document.getElementById('blinkAccountIdInput').value);
-            formData.append('blink_network_id', document.getElementById('blinkNetworkIdInput').value);
-            formData.append('blink_camera_id', document.getElementById('blinkCameraIdInput').value);
             formData.append('webhook_url', document.getElementById('webhookUrlInput').value);
             formData.append('webhook_enabled', document.getElementById('webhookEnabledInput').checked ? '1' : '0');
 
@@ -1057,7 +885,7 @@ String generateMainPage() {
                 .then(response => response.json())
                 .then(data => {
                     alert('บันทึกการตั้งค่าเรียบร้อย!');
-                    closeBlinkModal();
+                    closeSystemModal();
                     updateStatus();
                 });
         }
