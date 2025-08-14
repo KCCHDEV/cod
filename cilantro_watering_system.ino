@@ -98,6 +98,24 @@ void saveConfigCallback() {
   shouldSaveConfig = true;
 }
 
+// Callback function when entering config mode
+void configModeCallback(WiFiManager *myWiFiManager) {
+  Serial.println("🔥 Entered config mode!");
+  Serial.print("📶 AP IP address: ");
+  Serial.println(WiFi.softAPIP());
+  Serial.print("🌐 AP SSID: ");
+  Serial.println(myWiFiManager->getConfigPortalSSID());
+  Serial.println("🔗 Go to: http://192.168.4.1");
+  
+  // Blink LED to indicate config mode
+  for (int i = 0; i < 10; i++) {
+    digitalWrite(STATUS_LED, HIGH);
+    delay(200);
+    digitalWrite(STATUS_LED, LOW);
+    delay(200);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   
@@ -124,9 +142,11 @@ void setup() {
   loadConfig();
   
   // Check for WiFi reset button
+  bool forceConfigPortal = false;
   if (digitalRead(WIFI_RESET_BUTTON) == LOW) {
     Serial.println("🔄 WiFi Reset button pressed - Clearing saved WiFi credentials");
     wifiManager.resetSettings();
+    forceConfigPortal = true;
     delay(3000);
   }
   
@@ -134,8 +154,18 @@ void setup() {
   setupWiFiManager();
   
   // Connect to WiFi using WiFiManager
-  if (!wifiManager.autoConnect("CilantroWatering-Setup", "cilantro123")) {
-    Serial.println("❌ Failed to connect to WiFi");
+  bool connected = false;
+  if (forceConfigPortal) {
+    Serial.println("🌐 Starting Config Portal (Forced)...");
+    connected = wifiManager.startConfigPortal("CilantroWatering-Setup", "cilantro123");
+  } else {
+    Serial.println("🌐 Trying Auto Connect...");
+    connected = wifiManager.autoConnect("CilantroWatering-Setup", "cilantro123");
+  }
+  
+  if (!connected) {
+    Serial.println("❌ Failed to connect to WiFi - Restarting...");
+    delay(3000);
     ESP.restart();
   }
   
@@ -154,6 +184,8 @@ void setup() {
 }
 
 void setupWiFiManager() {
+  Serial.println("🔧 Setting up WiFiManager...");
+  
   // WiFiManager custom parameters for webhook configuration
   WiFiManagerParameter custom_webhook_url("webhook_url", "Webhook URL (Optional)", webhookUrl, 200);
   
@@ -163,12 +195,16 @@ void setupWiFiManager() {
   // Set callback to save custom parameters
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   
+  // Enable debug output
+  wifiManager.setDebugOutput(true);
+  
   // Set custom AP name and password
   wifiManager.setAPStaticIPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
   
   // Customize portal
   wifiManager.setConfigPortalTimeout(300); // 5 minutes timeout
   wifiManager.setConnectTimeout(20); // 20 seconds to connect
+  wifiManager.setAPCallback(configModeCallback);
   
   // Show additional info
   wifiManager.setCustomHeadElement("<style>body{background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);}</style>");
@@ -177,7 +213,10 @@ void setupWiFiManager() {
   String customInfo = "<p>🌿 ระบบรดน้ำผักชีฟลั่งอัตโนมัติ</p>";
   customInfo += "<p>📱 เชื่อมต่อกับ WiFi เพื่อใช้งานระบบ</p>";
   customInfo += "<p>💧 ระบบเรียบง่าย ใช้งานง่าย</p>";
+  customInfo += "<p>🔗 เข้าใช้งานที่: http://192.168.4.1</p>";
   wifiManager.setCustomHeadElement(customInfo.c_str());
+  
+  Serial.println("✅ WiFiManager setup completed");
 }
 
 void loadConfig() {
