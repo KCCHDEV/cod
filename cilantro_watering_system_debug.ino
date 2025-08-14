@@ -1,6 +1,7 @@
 /*
  * WiFiManager Debug Version - Cilantro Watering System
  * ใช้สำหรับทดสอบ WiFiManager Hotspot เท่านั้น
+ * ไม่ต้องใช้ RTC - ระบบจะทำงานได้แม้ไม่มี RTC
  */
 
 #include <WiFi.h>

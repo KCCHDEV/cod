@@ -23,6 +23,7 @@
 
 // Hardware Configuration
 RTC_DS3231 rtc;
+bool rtcAvailable = false;
 
 // Relay and Sensor Pins
 const int RELAY_COUNT = 3;
@@ -134,8 +135,12 @@ void setup() {
   // Initialize sensors
   Wire.begin();
   if (!rtc.begin()) {
-    Serial.println("❌ RTC DS3231 not found!");
-    while (1);
+    Serial.println("⚠️ RTC DS3231 not found - continuing without RTC");
+    Serial.println("🕒 Time-based features will use millis() fallback");
+    rtcAvailable = false;
+  } else {
+    Serial.println("✅ RTC DS3231 found and initialized");
+    rtcAvailable = true;
   }
   
   // Load saved configuration
@@ -237,8 +242,6 @@ void saveConfig() {
 }
 
 void loop() {
-  DateTime now = rtc.now();
-  
   // Check for WiFi reset button (long press)
   static unsigned long buttonPressTime = 0;
   if (digitalRead(WIFI_RESET_BUTTON) == LOW) {
@@ -260,8 +263,8 @@ void loop() {
     lastSensorRead = millis();
   }
   
-  // Check watering schedules
-  checkWateringSchedules(now);
+  // Check watering schedules (only if RTC available)
+  checkWateringSchedules();
   
   // Smart watering logic
   smartCilantroWatering();
@@ -315,11 +318,20 @@ void smartCilantroWatering() {
     }
     
     // Factor 2: Time-based watering need (morning/evening preference)
-    DateTime now = rtc.now();
-    bool isDayTime = (now.hour() >= 8 && now.hour() <= 18);
-    if (isDayTime && zone->currentMoisture < zone->targetMoisture) {
-      needsWater = true;
-      reason += "Daytime watering need. ";
+    if (rtcAvailable) {
+      DateTime now = rtc.now();
+      bool isDayTime = (now.hour() >= 8 && now.hour() <= 18);
+      if (isDayTime && zone->currentMoisture < zone->targetMoisture) {
+        needsWater = true;
+        reason += "Daytime watering need. ";
+      }
+    } else {
+      // Fallback: use millis-based timing (every 2 hours)
+      unsigned long timeSinceWatering = millis() - zone->lastWatered;
+      if (timeSinceWatering > 7200000 && zone->currentMoisture < zone->targetMoisture) { // 2 hours
+        needsWater = true;
+        reason += "Time-based watering (no RTC). ";
+      }
     }
     
     // Factor 3: Growth stage requirements
@@ -372,12 +384,17 @@ int calculateWateringDuration(int zoneIndex) {
   int moistureDeficit = zone->targetMoisture - zone->currentMoisture;
   float durationMultiplier = 1.0 + (moistureDeficit / 20.0); // +5% per 1% deficit
   
-  // Adjust based on time of day
-  DateTime now = rtc.now();
-  if (now.hour() >= 10 && now.hour() <= 16) {
-    durationMultiplier *= 1.1; // 10% longer during midday heat
-  } else if (now.hour() <= 6 || now.hour() >= 20) {
-    durationMultiplier *= 0.9; // 10% shorter during cool periods
+  // Adjust based on time of day (if RTC available)
+  if (rtcAvailable) {
+    DateTime now = rtc.now();
+    if (now.hour() >= 10 && now.hour() <= 16) {
+      durationMultiplier *= 1.1; // 10% longer during midday heat
+    } else if (now.hour() <= 6 || now.hour() >= 20) {
+      durationMultiplier *= 0.9; // 10% shorter during cool periods
+    }
+  } else {
+    // Without RTC, use standard duration
+    Serial.println("ℹ️ Using standard watering duration (no RTC)");
   }
   
   // Adjust based on growth stage
@@ -405,7 +422,12 @@ String getZoneStatus(int zoneIndex) {
   }
 }
 
-void checkWateringSchedules(DateTime now) {
+void checkWateringSchedules() {
+  if (!rtcAvailable) {
+    return; // Skip scheduled watering if no RTC
+  }
+  
+  DateTime now = rtc.now();
   int scheduleCount = sizeof(cilantroSchedules) / sizeof(cilantroSchedules[0]);
   
   for (int i = 0; i < scheduleCount; i++) {
@@ -494,13 +516,23 @@ void sendWebhook(String message, String level) {
 }
 
 String getCurrentTime() {
-  DateTime now = rtc.now();
-  return String(now.year()) + "-" + 
-         String(now.month()) + "-" + 
-         String(now.day()) + " " + 
-         String(now.hour()) + ":" + 
-         String(now.minute()) + ":" + 
-         String(now.second());
+  if (rtcAvailable) {
+    DateTime now = rtc.now();
+    return String(now.year()) + "-" + 
+           String(now.month()) + "-" + 
+           String(now.day()) + " " + 
+           String(now.hour()) + ":" + 
+           String(now.minute()) + ":" + 
+           String(now.second());
+  } else {
+    // Fallback to system uptime
+    unsigned long uptimeSeconds = millis() / 1000;
+    unsigned long hours = uptimeSeconds / 3600;
+    unsigned long minutes = (uptimeSeconds % 3600) / 60;
+    unsigned long seconds = uptimeSeconds % 60;
+    return "UPTIME " + String(hours) + ":" + 
+           String(minutes) + ":" + String(seconds);
+  }
 }
 
 void logSensorData() {
@@ -545,6 +577,7 @@ void handleStatus() {
   doc["uptime"] = millis() / 1000;
   doc["free_memory"] = ESP.getFreeHeap();
   doc["total_watering_today"] = wateringCount[0] + wateringCount[1] + wateringCount[2];
+  doc["rtc_available"] = rtcAvailable;
   
   JsonArray zones = doc.createNestedArray("zones");
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -561,7 +594,7 @@ void handleStatus() {
   }
   
   doc["webhook_enabled"] = webhookEnabled;
-  doc["system_status"] = "running";
+  doc["system_status"] = rtcAvailable ? "running" : "running_no_rtc";
   
   String response;
   serializeJson(doc, response);
@@ -793,6 +826,7 @@ String generateMainPage() {
                     <p><strong>🌐 IP Address:</strong> <span id="modalIpAddress">--</span></p>
                     <p><strong>💧 รดน้ำวันนี้:</strong> <span id="modalTotalWatering">--</span> ครั้ง</p>
                     <p><strong>🕒 เวลาปัจจุบัน:</strong> <span id="modalCurrentTime">--</span></p>
+                    <p><strong>⏰ RTC Status:</strong> <span id="modalRtcStatus">--</span></p>
                     <hr>
                     <h3>⚙️ ตั้งค่า Webhook (ทางเลือก)</h3>
                     <p><label>Webhook URL:</label><br><input type="url" id="webhookUrlInput" style="width:100%; padding:8px; margin:5px 0;" placeholder="https://example.com/webhook"></p>
@@ -814,7 +848,13 @@ String generateMainPage() {
                     document.getElementById('currentTime').textContent = data.timestamp.split(' ')[1];
                     document.getElementById('totalWatering').textContent = data.total_watering_today + ' ครั้ง';
                     document.getElementById('freeMemory').textContent = Math.round(data.free_memory / 1024) + ' KB';
-                    document.getElementById('systemStatus').textContent = data.system_status === 'running' ? '🟢 ทำงานปกติ' : '🔴 ขัดข้อง';
+                    let statusText = '🔴 ขัดข้อง';
+                    if (data.system_status === 'running') {
+                        statusText = '🟢 ทำงานปกติ';
+                    } else if (data.system_status === 'running_no_rtc') {
+                        statusText = '🟡 ทำงาน (ไม่มี RTC)';
+                    }
+                    document.getElementById('systemStatus').textContent = statusText;
                     
                     updateZones(data.zones);
                 });
@@ -907,6 +947,7 @@ String generateMainPage() {
                     document.getElementById('modalUptime').textContent = formatUptime(data.uptime);
                     document.getElementById('modalTotalWatering').textContent = data.total_watering_today;
                     document.getElementById('modalCurrentTime').textContent = data.timestamp;
+                    document.getElementById('modalRtcStatus').textContent = data.rtc_available ? '✅ พร้อมใช้งาน' : '⚠️ ไม่พบ RTC';
                     document.getElementById('systemModal').style.display = 'block';
                 });
         }
