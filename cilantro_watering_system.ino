@@ -20,10 +20,16 @@
 #include <HTTPClient.h>
 #include <WiFiManager.h> // WiFiManager library for captive portal
 #include <EEPROM.h>
+#include <LiquidCrystal_I2C.h> // LCD library for debug screen
 
 // Hardware Configuration
 RTC_DS3231 rtc;
 bool rtcAvailable = false;
+
+// LCD Configuration (Auto-detect)
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Default I2C address
+bool lcdAvailable = false;
+unsigned long lastLCDUpdate = 0;
 
 // Relay and Sensor Pins
 const int RELAY_COUNT = 1; // ใช้เซ็นเซอร์ตัวเดียว
@@ -42,6 +48,15 @@ bool shouldSaveConfig = false;
 // Webhook Configuration (optional)
 char webhookUrl[200] = "";
 bool webhookEnabled = false;
+
+// Blink Configuration
+char blinkEmail[100] = "";
+char blinkPassword[100] = "";
+char blinkAccountId[50] = "";
+char blinkNetworkId[50] = "";
+char blinkCameraId[50] = "";
+String blinkAuthToken = "";
+bool blinkConnected = false;
 
 // System variables
 WebServer server(80);
@@ -96,6 +111,173 @@ void saveConfigCallback() {
   shouldSaveConfig = true;
 }
 
+// ======================== LCD Functions ========================
+void initLCD() {
+  Serial.println("🖥️ Checking for LCD 16x2...");
+  
+  // Try different I2C addresses
+  byte addresses[] = {0x27, 0x3F, 0x20, 0x38};
+  
+  for (int i = 0; i < 4; i++) {
+    Wire.beginTransmission(addresses[i]);
+    if (Wire.endTransmission() == 0) {
+      Serial.print("📱 LCD found at address: 0x");
+      Serial.println(addresses[i], HEX);
+      
+      lcd = LiquidCrystal_I2C(addresses[i], 16, 2);
+      lcd.init();
+      lcd.backlight();
+      lcd.clear();
+      
+      // Test display
+      lcd.setCursor(0, 0);
+      lcd.print("🌿 ผักชีฟลั่ง");
+      lcd.setCursor(0, 1);
+      lcd.print("System Starting..");
+      
+      lcdAvailable = true;
+      Serial.println("✅ LCD initialized successfully");
+      return;
+    }
+  }
+  
+  Serial.println("⚠️ LCD not found - continuing without LCD");
+  lcdAvailable = false;
+}
+
+void updateLCDDebug() {
+  if (!lcdAvailable || millis() - lastLCDUpdate < 2000) return;
+  
+  lcd.clear();
+  
+  // Line 1: Moisture + WiFi status
+  lcd.setCursor(0, 0);
+  lcd.print("🌿 " + String(moisturePercent) + "%");
+  
+  // Show WiFi status
+  if (WiFi.status() == WL_CONNECTED) {
+    lcd.print(" WiFi:OK");
+  } else {
+    lcd.print(" WiFi:--");
+  }
+  
+  // Line 2: Status + time/blink
+  lcd.setCursor(0, 1);
+  String status = getZoneStatus(0);
+  if (status.length() > 8) status = status.substring(0, 8);
+  lcd.print(status);
+  
+  // Show Blink or time status
+  if (blinkConnected) {
+    lcd.print(" Blink:OK");
+  } else if (rtcAvailable) {
+    DateTime now = rtc.now();
+    lcd.print(" ");
+    if (now.hour() < 10) lcd.print("0");
+    lcd.print(now.hour());
+    lcd.print(":");
+    if (now.minute() < 10) lcd.print("0");
+    lcd.print(now.minute());
+  } else {
+    unsigned long uptime = millis() / 1000 / 60; // minutes
+    lcd.print(" " + String(uptime) + "m");
+  }
+  
+  lastLCDUpdate = millis();
+}
+
+// ======================== Blink Integration ========================
+void setupBlinkIntegration() {
+  // Setup Blink parameters for WiFiManager
+  WiFiManagerParameter custom_blink_email("blink_email", "Blink Email", blinkEmail, 100);
+  WiFiManagerParameter custom_blink_password("blink_password", "Blink Password", blinkPassword, 100, "type=\"password\"");
+  WiFiManagerParameter custom_blink_account("blink_account", "Blink Account ID", blinkAccountId, 50);
+  WiFiManagerParameter custom_blink_network("blink_network", "Blink Network ID", blinkNetworkId, 50);
+  WiFiManagerParameter custom_blink_camera("blink_camera", "Blink Camera ID", blinkCameraId, 50);
+  
+  wifiManager.addParameter(&custom_blink_email);
+  wifiManager.addParameter(&custom_blink_password);
+  wifiManager.addParameter(&custom_blink_account);
+  wifiManager.addParameter(&custom_blink_network);
+  wifiManager.addParameter(&custom_blink_camera);
+}
+
+bool authenticateBlink() {
+  if (strlen(blinkEmail) == 0 || strlen(blinkPassword) == 0) {
+    Serial.println("⚠️ Blink credentials not configured");
+    return false;
+  }
+  
+  HTTPClient http;
+  http.begin("https://rest-prod.immedia-semi.com/api/v5/account/login");
+  http.addHeader("Content-Type", "application/json");
+  
+  DynamicJsonDocument doc(512);
+  doc["email"] = blinkEmail;
+  doc["password"] = blinkPassword;
+  
+  String payload;
+  serializeJson(doc, payload);
+  
+  int httpCode = http.POST(payload);
+  
+  if (httpCode == 200) {
+    String response = http.getString();
+    DynamicJsonDocument responseDoc(2048);
+    deserializeJson(responseDoc, response);
+    
+    blinkAuthToken = responseDoc["auth"]["token"].as<String>();
+    strcpy(blinkAccountId, responseDoc["account"]["account_id"].as<String>().c_str());
+    
+    Serial.println("✅ Blink authentication successful");
+    blinkConnected = true;
+    
+    if (lcdAvailable) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Blink: Connected");
+      delay(2000);
+    }
+    
+    http.end();
+    return true;
+  } else {
+    Serial.println("❌ Blink authentication failed: " + String(httpCode));
+    blinkConnected = false;
+    http.end();
+    return false;
+  }
+}
+
+void updateBlinkStatus(String status, String moisture) {
+  if (!blinkConnected || blinkAuthToken.length() == 0) return;
+  
+  HTTPClient http;
+  String url = "https://rest-prod.immedia-semi.com/api/v1/accounts/" + String(blinkAccountId) + "/networks/" + String(blinkNetworkId) + "/cameras/" + String(blinkCameraId) + "/thumbnail";
+  
+  http.begin(url);
+  http.addHeader("TOKEN_AUTH", blinkAuthToken);
+  http.addHeader("Content-Type", "application/json");
+  
+  DynamicJsonDocument doc(512);
+  doc["status"] = "🌿 ผักชีฟลั่ง: " + status;
+  doc["moisture"] = moisture + "%";
+  doc["timestamp"] = getCurrentTime();
+  doc["system"] = "Cilantro Watering System";
+  
+  String payload;
+  serializeJson(doc, payload);
+  
+  int httpCode = http.POST(payload);
+  if (httpCode > 0) {
+    Serial.println("📤 Blink status updated: " + status);
+  } else {
+    Serial.println("❌ Blink update failed: " + String(httpCode));
+  }
+  
+  http.end();
+}
+
 // Callback function when entering config mode
 void configModeCallback(WiFiManager *myWiFiManager) {
   Serial.println("🔥 Entered config mode!");
@@ -133,15 +315,32 @@ void setup() {
   pinMode(MH_SENSOR_AO, INPUT);  // Analog input สำหรับขา AO
   pinMode(MH_SENSOR_DO, INPUT);  // Digital input สำหรับขา DO
   
-  // Initialize sensors
+  // Initialize I2C and sensors
   Wire.begin();
+  
+  // Initialize LCD (auto-detect)
+  initLCD();
+  
+  // Initialize RTC
   if (!rtc.begin()) {
     Serial.println("⚠️ RTC DS3231 not found - continuing without RTC");
     Serial.println("🕒 Time-based features will use millis() fallback");
     rtcAvailable = false;
+    if (lcdAvailable) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("RTC: Not Found");
+      delay(2000);
+    }
   } else {
     Serial.println("✅ RTC DS3231 found and initialized");
     rtcAvailable = true;
+    if (lcdAvailable) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("RTC: Connected");
+      delay(2000);
+    }
   }
   
   // Load saved configuration
@@ -179,11 +378,39 @@ void setup() {
   Serial.print("✅ WiFi connected! IP: ");
   Serial.println(WiFi.localIP());
   
+  if (lcdAvailable) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("WiFi: Connected");
+    lcd.setCursor(0, 1);
+    lcd.print(WiFi.localIP().toString());
+    delay(3000);
+  }
+  
+  // Authenticate with Blink
+  if (strlen(blinkEmail) > 0) {
+    Serial.println("🔗 Connecting to Blink...");
+    authenticateBlink();
+  }
+  
   // Setup web server
   setupWebServer();
   server.begin();
   Serial.println("🌐 Web server started");
   Serial.println("🌿 Simple Cilantro Watering System Ready!");
+  
+  if (lcdAvailable) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("🌿 System Ready");
+    lcd.setCursor(0, 1);
+    lcd.print("Monitoring...");
+  }
+  
+  // Initial Blink status update
+  if (blinkConnected) {
+    updateBlinkStatus("System Started", "0");
+  }
   
   // Send startup notification
   sendWebhook("🌿 Simple Cilantro Watering System Started", "info");
@@ -192,8 +419,11 @@ void setup() {
 void setupWiFiManager() {
   Serial.println("🔧 Setting up WiFiManager...");
   
-  // WiFiManager custom parameters for webhook configuration
+  // WiFiManager custom parameters for webhook and Blink configuration
   WiFiManagerParameter custom_webhook_url("webhook_url", "Webhook URL (Optional)", webhookUrl, 200);
+  
+  // Setup Blink integration
+  setupBlinkIntegration();
   
   // Add parameters to WiFiManager
   wifiManager.addParameter(&custom_webhook_url);
@@ -231,6 +461,28 @@ void loadConfig() {
   EEPROM.get(address, webhookUrl);
   address += sizeof(webhookUrl);
   EEPROM.get(address, webhookEnabled);
+  address += sizeof(webhookEnabled);
+  EEPROM.get(address, blinkEmail);
+  address += sizeof(blinkEmail);
+  EEPROM.get(address, blinkPassword);
+  address += sizeof(blinkPassword);
+  EEPROM.get(address, blinkAccountId);
+  address += sizeof(blinkAccountId);
+  EEPROM.get(address, blinkNetworkId);
+  
+  // Validate loaded data
+  if (strlen(webhookUrl) == 0 || webhookUrl[0] == 0xFF) {
+    strcpy(webhookUrl, "");
+    webhookEnabled = false;
+  }
+  
+  if (strlen(blinkEmail) == 0 || blinkEmail[0] == 0xFF) {
+    strcpy(blinkEmail, "");
+    strcpy(blinkPassword, "");
+    strcpy(blinkAccountId, "");
+    strcpy(blinkNetworkId, "");
+    strcpy(blinkCameraId, "");
+  }
 }
 
 void saveConfig() {
@@ -239,7 +491,16 @@ void saveConfig() {
   EEPROM.put(address, webhookUrl);
   address += sizeof(webhookUrl);
   EEPROM.put(address, webhookEnabled);
+  address += sizeof(webhookEnabled);
+  EEPROM.put(address, blinkEmail);
+  address += sizeof(blinkEmail);
+  EEPROM.put(address, blinkPassword);
+  address += sizeof(blinkPassword);
+  EEPROM.put(address, blinkAccountId);
+  address += sizeof(blinkAccountId);
+  EEPROM.put(address, blinkNetworkId);
   EEPROM.commit();
+  Serial.println("📁 Configuration saved to EEPROM");
 }
 
 void loop() {
@@ -311,6 +572,16 @@ void readAllSensors() {
   
   // Log sensor data
   logSensorData();
+  
+  // Update LCD debug screen
+  updateLCDDebug();
+  
+  // Update Blink status every 5 minutes
+  static unsigned long lastBlinkUpdate = 0;
+  if (blinkConnected && millis() - lastBlinkUpdate > 300000) { // 5 minutes
+    updateBlinkStatus(getZoneStatus(0), String(moisturePercent));
+    lastBlinkUpdate = millis();
+  }
 }
 
 void smartCilantroWatering() {
@@ -439,6 +710,20 @@ void startWatering(int zoneIndex, int durationMinutes) {
   
   Serial.println("💧 Started watering Zone " + String(zoneIndex + 1) + " for " + String(durationMinutes) + " minutes");
   
+  // Update LCD
+  if (lcdAvailable) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Watering...");
+    lcd.setCursor(0, 1);
+    lcd.print(String(durationMinutes) + " minutes");
+  }
+  
+  // Update Blink
+  if (blinkConnected) {
+    updateBlinkStatus("กำลังรดน้ำ", String(moisturePercent));
+  }
+  
   // Send webhook notification
   sendWebhook("💧 Zone " + String(zoneIndex + 1) + " watering started (" + String(durationMinutes) + " min)", "info");
 }
@@ -451,6 +736,21 @@ void stopWatering(int zoneIndex) {
   wateringEndTime[zoneIndex] = 0;
   
   Serial.println("🛑 Stopped watering Zone " + String(zoneIndex + 1));
+  
+  // Update LCD
+  if (lcdAvailable) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Watering Done");
+    lcd.setCursor(0, 1);
+    lcd.print("Moisture: " + String(moisturePercent) + "%");
+    delay(2000);
+  }
+  
+  // Update Blink
+  if (blinkConnected) {
+    updateBlinkStatus("รดน้ำเสร็จแล้ว", String(moisturePercent));
+  }
   
   // Send webhook notification
   sendWebhook("🛑 Zone " + String(zoneIndex + 1) + " watering completed", "info");
@@ -542,6 +842,7 @@ void setupWebServer() {
   server.on("/api/settings", HTTP_POST, handleSettingsUpdate);
   server.on("/api/emergency", HTTP_POST, handleEmergencyStop);
   server.on("/api/wifi/reset", HTTP_POST, handleWiFiReset);
+  server.on("/api/blink/test", HTTP_POST, handleBlinkTest);
 }
 
 void handleWiFiReset() {
@@ -550,6 +851,15 @@ void handleWiFiReset() {
   delay(1000);
   wifiManager.resetSettings();
   ESP.restart();
+}
+
+void handleBlinkTest() {
+  if (blinkConnected) {
+    updateBlinkStatus("ทดสอบระบบ", String(moisturePercent));
+    server.send(200, "text/plain", "Blink test sent");
+  } else {
+    server.send(400, "text/plain", "Blink not connected");
+  }
 }
 
 void handleRoot() {
@@ -565,6 +875,8 @@ void handleStatus() {
   doc["free_memory"] = ESP.getFreeHeap();
   doc["total_watering_today"] = wateringCount[0];
   doc["rtc_available"] = rtcAvailable;
+  doc["lcd_available"] = lcdAvailable;
+  doc["blink_connected"] = blinkConnected;
   
   JsonArray zones = doc.createNestedArray("zones");
   for (int i = 0; i < RELAY_COUNT; i++) {
