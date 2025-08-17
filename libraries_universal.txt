@@ -1,0 +1,50 @@
+ไลบรารี่ที่ต้องติดตั้งสำหรับ Universal Watering System
+=======================================================
+
+Required Libraries (ติดตั้งผ่าน Arduino IDE > Tools > Manage Libraries):
+
+1. RTClib by Adafruit
+   - Version: 2.1.4 หรือใหม่กว่า
+   - สำหรับ: RTC DS3231 Real Time Clock
+
+2. WiFiManager by tzapu
+   - Version: 2.0.17 หรือใหม่กว่า  
+   - สำหรับ: WiFi Configuration Portal
+
+3. ArduinoJson by Benoit Blanchon
+   - Version: 7.x.x หรือใหม่กว่า
+   - สำหรับ: JSON data handling
+
+4. LiquidCrystal I2C by Frank de Brabander
+   - Version: 1.1.2 หรือใหม่กว่า
+   - สำหรับ: LCD 16x2 I2C display
+
+Built-in ESP32 Libraries (ไม่ต้องติดตั้งเพิ่ม):
+- Wire.h (I2C communication)
+- WiFi.h (WiFi connectivity)
+- WebServer.h (HTTP web server)
+- HTTPClient.h (HTTP requests for Blink)
+- EEPROM.h (Configuration storage)
+
+Hardware Requirements:
+- ESP32 Development Board
+- MH Soil Moisture Sensor
+- RTC DS3231 (optional)
+- LCD 16x2 with I2C backpack (optional)
+- Relay Module
+- Water Pump
+- Status LED
+- Push Button (WiFi reset)
+
+Optional Features:
+- Blink Camera integration (requires account)
+- Webhook notifications
+- Real-time clock (RTC)
+- LCD display
+
+Installation Instructions:
+1. เปิด Arduino IDE
+2. ไปที่ Tools > Manage Libraries
+3. ค้นหาและติดตั้งไลบรารี่ตามรายการข้างต้น
+4. เลือก Board: ESP32 Dev Module
+5. Upload โค้ด universal_watering_system.ino

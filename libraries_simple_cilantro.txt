@@ -1,0 +1,216 @@
+ESP32 Simple Cilantro Watering System - Required Libraries
+========================================================
+
+Install these libraries in Arduino IDE:
+
+1. RTClib by Adafruit
+   - Author: Adafruit
+   - Version: 2.1.1 or later
+   - Description: Library for DS3231 RTC module
+   - Install: Tools > Manage Libraries > Search "RTClib"
+
+2. ArduinoJson by Benoit Blanchon
+   - Author: Benoit Blanchon
+   - Version: 6.21.3 or later
+   - Description: JSON library for Arduino
+   - Install: Tools > Manage Libraries > Search "ArduinoJson"
+
+3. WiFiManager by tzapu
+   - Author: tzapu
+   - Version: 2.0.16-rc.2 or later
+   - Description: WiFi Configuration Manager with Captive Portal
+   - Install: Tools > Manage Libraries > Search "WiFiManager"
+
+Built-in Libraries (no installation needed):
+- WiFi (ESP32)
+- WebServer (ESP32)
+- Wire (I2C communication)
+- EEPROM (ESP32)
+- Arduino.h (core Arduino functions)
+
+Removed Libraries (no longer needed):
+- DHT sensor library (DHT22 sensor removed)
+- Light sensor library (LDR sensor removed)
+- Blink API libraries (Blink Camera removed)
+
+Installation Steps:
+==================
+
+1. Open Arduino IDE
+2. Go to Tools > Manage Libraries
+3. Search for each library name above
+4. Click "Install" for each library
+5. Restart Arduino IDE if needed
+
+Alternative Installation (Manual):
+=================================
+
+If library manager doesn't work:
+
+1. Download libraries from GitHub:
+   - RTClib: https://github.com/adafruit/RTClib
+   - ArduinoJson: https://github.com/bblanchon/ArduinoJson
+   - WiFiManager: https://github.com/tzapu/WiFiManager
+
+2. Extract to Arduino/libraries folder:
+   - Windows: Documents\Arduino\libraries\
+   - Mac: ~/Documents/Arduino/libraries/
+   - Linux: ~/Arduino/libraries/
+
+3. Restart Arduino IDE
+
+Board Configuration:
+===================
+
+1. Install ESP32 board support:
+   - File > Preferences
+   - Add URL: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   - Tools > Board > Boards Manager
+   - Search "ESP32" and install
+
+2. Select Board:
+   - Tools > Board > ESP32 Arduino > ESP32 Dev Module
+
+3. Configure Settings:
+   - Upload Speed: 115200
+   - CPU Frequency: 240MHz
+   - Flash Frequency: 80MHz
+   - Flash Mode: QIO
+   - Flash Size: 4MB
+   - Partition Scheme: Default 4MB with spiffs
+
+WiFi Manager Features:
+=====================
+
+1. Captive Portal:
+   - Creates hotspot "CilantroWatering-Setup" 
+   - Password: "cilantro123"
+   - Access via: http://192.168.4.1
+
+2. Auto-Connect:
+   - Automatically connects to saved WiFi
+   - Falls back to setup mode if connection fails
+
+3. WiFi Reset:
+   - Hold Boot button (GPIO 0) for 5 seconds
+   - Or use web interface reset button
+   - Clears saved credentials and restarts
+
+4. Configuration Storage:
+   - WiFi credentials saved to ESP32 flash
+   - Webhook settings saved to EEPROM
+   - Persistent across power cycles
+
+System Features:
+===============
+
+1. Removed Components:
+   - DHT22 temperature/humidity sensor
+   - Light sensor (LDR/Photoresistor)
+   - Blink Camera integration
+   - All external API dependencies
+
+2. Simple Features:
+   - WiFi Manager captive portal
+   - Local web interface only
+   - EEPROM storage for webhook settings (optional)
+   - WiFi signal strength monitoring
+   - System uptime and memory monitoring
+   - Current time display
+
+3. Clean Web Interface:
+   - Soil moisture monitoring only
+   - System status information
+   - Manual watering controls
+   - WiFi reset functionality
+   - Time-based watering logic
+   - System information modal
+
+Usage Instructions:
+==================
+
+1. First Setup:
+   - Flash the code to ESP32
+   - ESP32 will create hotspot "CilantroWatering-Setup"
+   - Connect to hotspot with password "cilantro123"
+   - Browser will open configuration page automatically
+   - Select your WiFi network and enter password
+   - Optionally configure webhook URL
+   - Save and the system will restart
+
+2. Normal Operation:
+   - ESP32 connects to saved WiFi automatically
+   - Access web interface via ESP32's IP address
+   - Monitor soil moisture and watering zones
+   - Control watering manually if needed
+
+3. Reconfiguration:
+   - Hold Boot button for 5 seconds to reset WiFi
+   - Or use web interface reset button
+   - System will restart in setup mode
+
+Troubleshooting:
+===============
+
+Library Conflicts:
+- Remove old sensor libraries if present
+- Ensure WiFiManager version 2.0.16-rc.2 or later
+- Check for duplicate libraries in Arduino/libraries
+
+Compilation Errors:
+- Make sure ESP32 board is selected
+- Update Arduino IDE to latest version
+- Verify all required libraries are installed
+
+WiFi Issues:
+- Ensure 2.4GHz network (ESP32 doesn't support 5GHz)
+- Check captive portal at http://192.168.4.1
+- Try manual WiFi reset with Boot button
+
+Hardware Connections:
+====================
+
+ESP32 Pin Connections:
+- GPIO 5, 18, 19: Relay outputs (zones 1-3)
+- GPIO 36, 39, 34: Soil moisture sensors (zones 1-3)
+- GPIO 2: Status LED
+- GPIO 21: Optional flow sensor
+- GPIO 0: Boot button (WiFi reset)
+- SDA/SCL: RTC DS3231 module
+
+Power Requirements:
+- ESP32: 3.3V
+- Relays: 5V (with optocouplers)
+- Sensors: 3.3V
+- Total current: ~300mA (without pumps)
+
+Available Pins for Future Expansion:
+- GPIO 4: [Free after DHT22 removal]
+- GPIO 35: [Free after light sensor removal]
+- GPIO 12, 13, 14, 15, 16, 17: Available for additional sensors
+- GPIO 25, 26, 27: Available for PWM control or additional analog inputs
+
+Simple System Benefits:
+======================
+
+1. Reliability:
+   - No external API dependencies
+   - Fewer points of failure
+   - Local operation only
+
+2. Ease of Use:
+   - Simple web interface
+   - Easy WiFi setup
+   - No complex configurations
+
+3. Cost Effective:
+   - Fewer components needed
+   - Lower power consumption
+   - Reduced complexity
+
+4. Maintenance:
+   - Fewer things to troubleshoot
+   - No external service dependencies
+   - Simple logging and monitoring
+
+The system focuses on core watering functionality with a clean, simple interface.

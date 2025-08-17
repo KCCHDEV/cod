@@ -1,0 +1,190 @@
+ESP32 Cilantro Watering System with WiFi Manager - Required Libraries
+=======================================================================
+
+Install these libraries in Arduino IDE:
+
+1. RTClib by Adafruit
+   - Author: Adafruit
+   - Version: 2.1.1 or later
+   - Description: Library for DS3231 RTC module
+   - Install: Tools > Manage Libraries > Search "RTClib"
+
+2. ArduinoJson by Benoit Blanchon
+   - Author: Benoit Blanchon
+   - Version: 6.21.3 or later
+   - Description: JSON library for Arduino
+   - Install: Tools > Manage Libraries > Search "ArduinoJson"
+
+3. WiFiManager by tzapu
+   - Author: tzapu
+   - Version: 2.0.16-rc.2 or later
+   - Description: WiFi Configuration Manager with Captive Portal
+   - Install: Tools > Manage Libraries > Search "WiFiManager"
+
+Built-in Libraries (no installation needed):
+- WiFi (ESP32)
+- WebServer (ESP32)
+- Wire (I2C communication)
+- EEPROM (ESP32)
+- Arduino.h (core Arduino functions)
+
+Removed Libraries (no longer needed):
+- DHT sensor library (DHT22 sensor removed)
+- Light sensor library (LDR sensor removed)
+
+Installation Steps:
+==================
+
+1. Open Arduino IDE
+2. Go to Tools > Manage Libraries
+3. Search for each library name above
+4. Click "Install" for each library
+5. Restart Arduino IDE if needed
+
+Alternative Installation (Manual):
+=================================
+
+If library manager doesn't work:
+
+1. Download libraries from GitHub:
+   - RTClib: https://github.com/adafruit/RTClib
+   - ArduinoJson: https://github.com/bblanchon/ArduinoJson
+   - WiFiManager: https://github.com/tzapu/WiFiManager
+
+2. Extract to Arduino/libraries folder:
+   - Windows: Documents\Arduino\libraries\
+   - Mac: ~/Documents/Arduino/libraries/
+   - Linux: ~/Arduino/libraries/
+
+3. Restart Arduino IDE
+
+Board Configuration:
+===================
+
+1. Install ESP32 board support:
+   - File > Preferences
+   - Add URL: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   - Tools > Board > Boards Manager
+   - Search "ESP32" and install
+
+2. Select Board:
+   - Tools > Board > ESP32 Arduino > ESP32 Dev Module
+
+3. Configure Settings:
+   - Upload Speed: 115200
+   - CPU Frequency: 240MHz
+   - Flash Frequency: 80MHz
+   - Flash Mode: QIO
+   - Flash Size: 4MB
+   - Partition Scheme: Default 4MB with spiffs
+
+WiFi Manager Features:
+=====================
+
+1. Captive Portal:
+   - Creates hotspot "CilantroWatering-Setup" 
+   - Password: "cilantro123"
+   - Access via: http://192.168.4.1
+
+2. Auto-Connect:
+   - Automatically connects to saved WiFi
+   - Falls back to setup mode if connection fails
+
+3. WiFi Reset:
+   - Hold Boot button (GPIO 0) for 5 seconds
+   - Or use web interface reset button
+   - Clears saved credentials and restarts
+
+4. Configuration Storage:
+   - WiFi credentials saved to ESP32 flash
+   - Blink settings saved to EEPROM
+   - Persistent across power cycles
+
+System Features:
+===============
+
+1. Removed Components:
+   - DHT22 temperature/humidity sensor
+   - Light sensor (LDR/Photoresistor)
+   - All temperature and light-based logic
+   - Temperature and light level display in web interface
+
+2. Enhanced Features:
+   - WiFi Manager captive portal
+   - Blink configuration via web interface
+   - EEPROM storage for settings
+   - WiFi signal strength monitoring
+   - System uptime display
+   - Current time display
+
+3. New Web Interface:
+   - Simplified sensor display (soil moisture only)
+   - Blink configuration modal
+   - WiFi reset functionality
+   - Enhanced system status
+   - Time-based watering logic
+
+Usage Instructions:
+==================
+
+1. First Setup:
+   - Flash the code to ESP32
+   - ESP32 will create hotspot "CilantroWatering-Setup"
+   - Connect to hotspot with password "cilantro123"
+   - Browser will open configuration page automatically
+   - Select your WiFi network and enter password
+   - Optionally configure Blink settings
+   - Save and the system will restart
+
+2. Normal Operation:
+   - ESP32 connects to saved WiFi automatically
+   - Access web interface via ESP32's IP address
+   - Configure Blink camera via web settings
+   - Monitor and control watering zones
+
+3. Reconfiguration:
+   - Hold Boot button for 5 seconds to reset WiFi
+   - Or use web interface reset button
+   - System will restart in setup mode
+
+Troubleshooting:
+===============
+
+Library Conflicts:
+- Remove old DHT sensor library if present
+- Ensure WiFiManager version 2.0.16-rc.2 or later
+- Check for duplicate libraries in Arduino/libraries
+
+Compilation Errors:
+- Make sure ESP32 board is selected
+- Update Arduino IDE to latest version
+- Verify all required libraries are installed
+
+WiFi Issues:
+- Ensure 2.4GHz network (ESP32 doesn't support 5GHz)
+- Check captive portal at http://192.168.4.1
+- Try manual WiFi reset with Boot button
+
+Blink Integration:
+- Configure Blink credentials via web interface
+- Test connection using web interface button
+- Check serial monitor for authentication status
+
+Hardware Connections:
+====================
+
+ESP32 Pin Connections:
+- GPIO 5, 18, 19: Relay outputs (zones 1-3)
+- GPIO 36, 39, 34: Soil moisture sensors (zones 1-3)
+- GPIO 2: Status LED
+- GPIO 21: Optional flow sensor
+- GPIO 0: Boot button (WiFi reset)
+- SDA/SCL: RTC DS3231 module
+
+Power Requirements:
+- ESP32: 3.3V
+- Relays: 5V (with optocouplers)
+- Sensors: 3.3V
+- Total current: ~400mA (without pumps)
+
+Note: GPIO 4 and GPIO 35 are now free for other uses (DHT22 and light sensor removed).

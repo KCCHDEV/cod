@@ -1,15 +1,15 @@
 /*
- * ระบบรดน้ำผักชีฟลั่งอัตโนมัติขั้นสูง
- * ESP32 + RTC + DHT22 + Soil Moisture + Relay + Blink Camera
+ * ระบบรดน้ำผักชีฟลั่งอัตโนมัติ (เวอร์ชันเรียบง่าย)
+ * ESP32 + RTC + Soil Moisture + Relay + WiFi Manager
  * 
  * Features:
  * - รดน้ำอัตโนมัติตามความต้องการของผักชีฟลั่ง
- * - ตรวจวัดอุณหภูมิ ความชื้นอากาศ และความชื้นดิน
- * - เชื่อมต่อ Blink Camera สำหรับการติดตาม
+ * - ตรวจวัดความชื้นดินเท่านั้น (เรียบง่าย)
  * - ระบบควบคุมปริมาณน้ำแบบแม่นยำ
- * - Web Interface แบบ Responsive
- * - Webhook Notifications
- * - การปรับระบบตามสภาพอากาศ
+ * - WiFi Manager สำหรับเลือกเครือข่าย WiFi ผ่าน Captive Portal
+ * - Web Interface แบบ Responsive แสดงสถานะในเครื่อง
+ * - Webhook Notifications (ทางเลือก)
+ * - การรดน้ำตามเวลาที่เหมาะสม
  */
 
 #include <Wire.h>
@@ -18,67 +18,61 @@
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
-#include "DHT.h"
+#include <WiFiManager.h> // WiFiManager library for captive portal
+#include <EEPROM.h>
+#include <LiquidCrystal_I2C.h> // LCD library for debug screen
 
 // Hardware Configuration
 RTC_DS3231 rtc;
-#define DHT_PIN 4
-#define DHT_TYPE DHT22
-DHT dht(DHT_PIN, DHT_TYPE);
+bool rtcAvailable = false;
+
+// LCD Configuration (Auto-detect)
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Default I2C address
+bool lcdAvailable = false;
+unsigned long lastLCDUpdate = 0;
 
 // Relay and Sensor Pins
-const int RELAY_COUNT = 3;
-const int relayPins[RELAY_COUNT] = {5, 18, 19}; // 3 zones for cilantro
-const int SOIL_MOISTURE_PINS[RELAY_COUNT] = {36, 39, 34};
-const int LIGHT_SENSOR_PIN = 35;
+const int RELAY_COUNT = 1; // ใช้เซ็นเซอร์ตัวเดียว
+const int relayPins[RELAY_COUNT] = {5}; // รีเลย์ควบคุมปั๊มน้ำ
+// MH Sensor Pins
+const int MH_SENSOR_AO = 36; // ขา AO (Analog Output) ต่อกับ GPIO 36
+const int MH_SENSOR_DO = 35; // ขา DO (Digital Output) ต่อกับ GPIO 35
 const int STATUS_LED = 2;
 const int PUMP_FLOW_SENSOR = 21; // Optional flow sensor
+const int WIFI_RESET_BUTTON = 0; // Boot button for WiFi reset
 
-// WiFi & Blink Configuration
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-const char* blinkEmail = "YOUR_BLINK_EMAIL";
-const char* blinkPassword = "YOUR_BLINK_PASSWORD";
-const char* blinkAccountId = "YOUR_BLINK_ACCOUNT_ID";
-const char* blinkNetworkId = "YOUR_BLINK_NETWORK_ID";
-const char* blinkCameraId = "YOUR_BLINK_CAMERA_ID";
+// WiFi Manager Configuration
+WiFiManager wifiManager;
+bool shouldSaveConfig = false;
 
-// Webhook Configuration
-const char* webhookUrl = "YOUR_WEBHOOK_URL";
-bool webhookEnabled = true;
+// Webhook Configuration (optional)
+char webhookUrl[200] = "";
+bool webhookEnabled = false;
 
-// Blink API endpoints
-const char* blinkAuthUrl = "https://rest-prod.immedia-semi.com/api/v5/account/login";
-const char* blinkCameraUrl = "https://rest-prod.immedia-semi.com/api/v1/networks/";
-const char* blinkArmUrl = "https://rest-prod.immedia-semi.com/api/v1/networks/";
-const char* blinkDisarmUrl = "https://rest-prod.immedia-semi.com/api/v1/networks/";
+// Blink Configuration
+char blinkEmail[100] = "";
+char blinkPassword[100] = "";
+char blinkAccountId[50] = "";
+char blinkNetworkId[50] = "";
+char blinkCameraId[50] = "";
+String blinkAuthToken = "";
+bool blinkConnected = false;
 
 // System variables
 WebServer server(80);
-bool relayStates[RELAY_COUNT] = {false, false, false};
-int wateringCount[RELAY_COUNT] = {0, 0, 0};
-unsigned long lastWateringTime[RELAY_COUNT] = {0, 0, 0};
-unsigned long wateringEndTime[RELAY_COUNT] = {0, 0, 0};
+bool relayStates[RELAY_COUNT] = {false};
+int wateringCount[RELAY_COUNT] = {0};
+unsigned long lastWateringTime[RELAY_COUNT] = {0};
+unsigned long wateringEndTime[RELAY_COUNT] = {0};
 
-// Cilantro-specific settings
-const int CILANTRO_MOISTURE_MIN = 45; // ผักชีฟลั่งต้องการความชื้นปานกลาง
-const int CILANTRO_MOISTURE_MAX = 75;
-const int CILANTRO_TEMP_MIN = 15;     // อุณหภูมิที่เหมาะสม 15-25°C
-const int CILANTRO_TEMP_MAX = 25;
-const int CILANTRO_LIGHT_MIN = 4;     // ต้องการแสงปานกลาง 4-6 ชั่วโมง
-const int CILANTRO_LIGHT_MAX = 6;
+// MH Sensor settings
+const int MOISTURE_THRESHOLD_LOW = 30;  // รดน้ำเมื่อความชื้นต่ำกว่า 30%
+const int MOISTURE_THRESHOLD_HIGH = 70; // หยุดรดน้ำเมื่อความชื้นถึง 70%
 
-// Environmental data
-float temperature = 0;
-float humidity = 0;
-int soilMoisture[RELAY_COUNT] = {0, 0, 0};
-int lightLevel = 0;
+// Environmental data (removed temperature, humidity, and light level)
+int soilMoisture[RELAY_COUNT] = {0};
 float waterFlowRate = 0;
-
-// Blink authentication
-String blinkAuthToken = "";
-unsigned long lastBlinkAuth = 0;
-const unsigned long BLINK_AUTH_INTERVAL = 3600000; // 1 hour
+int moisturePercent = 0; // ความชื้นเป็นเปอร์เซ็นต์
 
 // Advanced watering logic
 struct CilantroZone {
@@ -94,9 +88,7 @@ struct CilantroZone {
 };
 
 CilantroZone cilantroZones[RELAY_COUNT] = {
-  {0, "Zone 1 - Seedling", 50, 65, 5, false, 0, 0.2, "Growing"},
-  {1, "Zone 2 - Growing", 45, 60, 7, false, 0, 0.6, "Healthy"},
-  {2, "Zone 3 - Mature", 40, 55, 8, false, 0, 0.9, "Ready"}
+  {0, "ผักชีฟลั่ง", 50, MOISTURE_THRESHOLD_HIGH, 5, false, 0, 0.5, "Growing"}
 };
 
 // Watering schedules for cilantro (early morning and evening)
@@ -109,16 +101,206 @@ struct WateringSchedule {
 };
 
 WateringSchedule cilantroSchedules[] = {
-  {6, 0, 0, 3, true},   // Zone 1 - 6:00 AM
-  {6, 5, 1, 5, true},   // Zone 2 - 6:05 AM  
-  {6, 10, 2, 7, true},  // Zone 3 - 6:10 AM
-  {18, 0, 0, 2, true},  // Zone 1 - 6:00 PM
-  {18, 5, 1, 4, true},  // Zone 2 - 6:05 PM
-  {18, 10, 2, 5, true}  // Zone 3 - 6:10 PM
+  {6, 0, 0, 3, true},   // ผักชีฟลั่ง - 6:00 AM
+  {18, 0, 0, 3, true}   // ผักชีฟลั่ง - 6:00 PM
 };
+
+// Callback function for saving WiFi config
+void saveConfigCallback() {
+  Serial.println("Should save config");
+  shouldSaveConfig = true;
+}
+
+// ======================== LCD Functions ========================
+void initLCD() {
+  Serial.println("🖥️ Checking for LCD 16x2...");
+  
+  // Try different I2C addresses
+  byte addresses[] = {0x27, 0x3F, 0x20, 0x38};
+  
+  for (int i = 0; i < 4; i++) {
+    Wire.beginTransmission(addresses[i]);
+    if (Wire.endTransmission() == 0) {
+      Serial.print("📱 LCD found at address: 0x");
+      Serial.println(addresses[i], HEX);
+      
+      lcd = LiquidCrystal_I2C(addresses[i], 16, 2);
+      lcd.init();
+      lcd.backlight();
+      lcd.clear();
+      
+      // Test display
+      lcd.setCursor(0, 0);
+      lcd.print("🌿 ผักชีฟลั่ง");
+      lcd.setCursor(0, 1);
+      lcd.print("System Starting..");
+      
+      lcdAvailable = true;
+      Serial.println("✅ LCD initialized successfully");
+      return;
+    }
+  }
+  
+  Serial.println("⚠️ LCD not found - continuing without LCD");
+  lcdAvailable = false;
+}
+
+void updateLCDDebug() {
+  if (!lcdAvailable || millis() - lastLCDUpdate < 2000) return;
+  
+  lcd.clear();
+  
+  // Line 1: Moisture + WiFi status
+  lcd.setCursor(0, 0);
+  lcd.print("🌿 " + String(moisturePercent) + "%");
+  
+  // Show WiFi status
+  if (WiFi.status() == WL_CONNECTED) {
+    lcd.print(" WiFi:OK");
+  } else {
+    lcd.print(" WiFi:--");
+  }
+  
+  // Line 2: Status + time/blink
+  lcd.setCursor(0, 1);
+  String status = getZoneStatus(0);
+  if (status.length() > 8) status = status.substring(0, 8);
+  lcd.print(status);
+  
+  // Show Blink or time status
+  if (blinkConnected) {
+    lcd.print(" Blink:OK");
+  } else if (rtcAvailable) {
+    DateTime now = rtc.now();
+    lcd.print(" ");
+    if (now.hour() < 10) lcd.print("0");
+    lcd.print(now.hour());
+    lcd.print(":");
+    if (now.minute() < 10) lcd.print("0");
+    lcd.print(now.minute());
+  } else {
+    unsigned long uptime = millis() / 1000 / 60; // minutes
+    lcd.print(" " + String(uptime) + "m");
+  }
+  
+  lastLCDUpdate = millis();
+}
+
+// ======================== Blink Integration ========================
+void setupBlinkIntegration() {
+  // Setup Blink parameters for WiFiManager
+  WiFiManagerParameter custom_blink_email("blink_email", "Blink Email", blinkEmail, 100);
+  WiFiManagerParameter custom_blink_password("blink_password", "Blink Password", blinkPassword, 100, "type=\"password\"");
+  WiFiManagerParameter custom_blink_account("blink_account", "Blink Account ID", blinkAccountId, 50);
+  WiFiManagerParameter custom_blink_network("blink_network", "Blink Network ID", blinkNetworkId, 50);
+  WiFiManagerParameter custom_blink_camera("blink_camera", "Blink Camera ID", blinkCameraId, 50);
+  
+  wifiManager.addParameter(&custom_blink_email);
+  wifiManager.addParameter(&custom_blink_password);
+  wifiManager.addParameter(&custom_blink_account);
+  wifiManager.addParameter(&custom_blink_network);
+  wifiManager.addParameter(&custom_blink_camera);
+}
+
+bool authenticateBlink() {
+  if (strlen(blinkEmail) == 0 || strlen(blinkPassword) == 0) {
+    Serial.println("⚠️ Blink credentials not configured");
+    return false;
+  }
+  
+  HTTPClient http;
+  http.begin("https://rest-prod.immedia-semi.com/api/v5/account/login");
+  http.addHeader("Content-Type", "application/json");
+  
+  DynamicJsonDocument doc(512);
+  doc["email"] = blinkEmail;
+  doc["password"] = blinkPassword;
+  
+  String payload;
+  serializeJson(doc, payload);
+  
+  int httpCode = http.POST(payload);
+  
+  if (httpCode == 200) {
+    String response = http.getString();
+    DynamicJsonDocument responseDoc(2048);
+    deserializeJson(responseDoc, response);
+    
+    blinkAuthToken = responseDoc["auth"]["token"].as<String>();
+    strcpy(blinkAccountId, responseDoc["account"]["account_id"].as<String>().c_str());
+    
+    Serial.println("✅ Blink authentication successful");
+    blinkConnected = true;
+    
+    if (lcdAvailable) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Blink: Connected");
+      delay(2000);
+    }
+    
+    http.end();
+    return true;
+  } else {
+    Serial.println("❌ Blink authentication failed: " + String(httpCode));
+    blinkConnected = false;
+    http.end();
+    return false;
+  }
+}
+
+void updateBlinkStatus(String status, String moisture) {
+  if (!blinkConnected || blinkAuthToken.length() == 0) return;
+  
+  HTTPClient http;
+  String url = "https://rest-prod.immedia-semi.com/api/v1/accounts/" + String(blinkAccountId) + "/networks/" + String(blinkNetworkId) + "/cameras/" + String(blinkCameraId) + "/thumbnail";
+  
+  http.begin(url);
+  http.addHeader("TOKEN_AUTH", blinkAuthToken);
+  http.addHeader("Content-Type", "application/json");
+  
+  DynamicJsonDocument doc(512);
+  doc["status"] = "🌿 ผักชีฟลั่ง: " + status;
+  doc["moisture"] = moisture + "%";
+  doc["timestamp"] = getCurrentTime();
+  doc["system"] = "Cilantro Watering System";
+  
+  String payload;
+  serializeJson(doc, payload);
+  
+  int httpCode = http.POST(payload);
+  if (httpCode > 0) {
+    Serial.println("📤 Blink status updated: " + status);
+  } else {
+    Serial.println("❌ Blink update failed: " + String(httpCode));
+  }
+  
+  http.end();
+}
+
+// Callback function when entering config mode
+void configModeCallback(WiFiManager *myWiFiManager) {
+  Serial.println("🔥 Entered config mode!");
+  Serial.print("📶 AP IP address: ");
+  Serial.println(WiFi.softAPIP());
+  Serial.print("🌐 AP SSID: ");
+  Serial.println(myWiFiManager->getConfigPortalSSID());
+  Serial.println("🔗 Go to: http://192.168.4.1");
+  
+  // Blink LED to indicate config mode
+  for (int i = 0; i < 10; i++) {
+    digitalWrite(STATUS_LED, HIGH);
+    delay(200);
+    digitalWrite(STATUS_LED, LOW);
+    delay(200);
+  }
+}
 
 void setup() {
   Serial.begin(115200);
+  
+  // Initialize EEPROM
+  EEPROM.begin(512);
   
   // Initialize pins
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -127,43 +309,214 @@ void setup() {
   }
   pinMode(STATUS_LED, OUTPUT);
   pinMode(PUMP_FLOW_SENSOR, INPUT_PULLUP);
+  pinMode(WIFI_RESET_BUTTON, INPUT_PULLUP);
   
-  // Initialize sensors
+  // Configure MH Sensor pins
+  pinMode(MH_SENSOR_AO, INPUT);  // Analog input สำหรับขา AO
+  pinMode(MH_SENSOR_DO, INPUT);  // Digital input สำหรับขา DO
+  
+  // Initialize I2C and sensors
   Wire.begin();
+  
+  // Initialize LCD (auto-detect)
+  initLCD();
+  
+  // Initialize RTC
   if (!rtc.begin()) {
-    Serial.println("❌ RTC DS3231 not found!");
-    while (1);
+    Serial.println("⚠️ RTC DS3231 not found - continuing without RTC");
+    Serial.println("🕒 Time-based features will use millis() fallback");
+    rtcAvailable = false;
+    if (lcdAvailable) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("RTC: Not Found");
+      delay(2000);
+    }
+  } else {
+    Serial.println("✅ RTC DS3231 found and initialized");
+    rtcAvailable = true;
+    if (lcdAvailable) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("RTC: Connected");
+      delay(2000);
+    }
   }
   
-  dht.begin();
+  // Load saved configuration
+  loadConfig();
   
-  // Connect to WiFi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-    digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
+  // Check for WiFi reset button
+  bool forceConfigPortal = false;
+  if (digitalRead(WIFI_RESET_BUTTON) == LOW) {
+    Serial.println("🔄 WiFi Reset button pressed - Clearing saved WiFi credentials");
+    wifiManager.resetSettings();
+    forceConfigPortal = true;
+    delay(3000);
   }
+  
+  // Setup WiFi Manager
+  setupWiFiManager();
+  
+  // Connect to WiFi using WiFiManager
+  bool connected = false;
+  if (forceConfigPortal) {
+    Serial.println("🌐 Starting Config Portal (Forced)...");
+    connected = wifiManager.startConfigPortal("CilantroWatering-Setup", "cilantro123");
+  } else {
+    Serial.println("🌐 Trying Auto Connect...");
+    connected = wifiManager.autoConnect("CilantroWatering-Setup", "cilantro123");
+  }
+  
+  if (!connected) {
+    Serial.println("❌ Failed to connect to WiFi - Restarting...");
+    delay(3000);
+    ESP.restart();
+  }
+  
   Serial.println();
   Serial.print("✅ WiFi connected! IP: ");
   Serial.println(WiFi.localIP());
   
-  // Initialize Blink camera
-  authenticateBlink();
+  if (lcdAvailable) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("WiFi: Connected");
+    lcd.setCursor(0, 1);
+    lcd.print(WiFi.localIP().toString());
+    delay(3000);
+  }
+  
+  // Authenticate with Blink
+  if (strlen(blinkEmail) > 0) {
+    Serial.println("🔗 Connecting to Blink...");
+    authenticateBlink();
+  }
   
   // Setup web server
   setupWebServer();
   server.begin();
   Serial.println("🌐 Web server started");
-  Serial.println("🌿 Cilantro Watering System Ready!");
+  Serial.println("🌿 Simple Cilantro Watering System Ready!");
+  
+  if (lcdAvailable) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("🌿 System Ready");
+    lcd.setCursor(0, 1);
+    lcd.print("Monitoring...");
+  }
+  
+  // Initial Blink status update
+  if (blinkConnected) {
+    updateBlinkStatus("System Started", "0");
+  }
   
   // Send startup notification
-  sendWebhook("🌿 Cilantro Watering System Started", "info");
+  sendWebhook("🌿 Simple Cilantro Watering System Started", "info");
+}
+
+void setupWiFiManager() {
+  Serial.println("🔧 Setting up WiFiManager...");
+  
+  // WiFiManager custom parameters for webhook and Blink configuration
+  WiFiManagerParameter custom_webhook_url("webhook_url", "Webhook URL (Optional)", webhookUrl, 200);
+  
+  // Setup Blink integration
+  setupBlinkIntegration();
+  
+  // Add parameters to WiFiManager
+  wifiManager.addParameter(&custom_webhook_url);
+  
+  // Set callback to save custom parameters
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+  
+  // Enable debug output
+  wifiManager.setDebugOutput(true);
+  
+  // Set custom AP name and password
+  wifiManager.setAPStaticIPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+  
+  // Customize portal
+  wifiManager.setConfigPortalTimeout(300); // 5 minutes timeout
+  wifiManager.setConnectTimeout(20); // 20 seconds to connect
+  wifiManager.setAPCallback(configModeCallback);
+  
+  // Show additional info
+  wifiManager.setCustomHeadElement("<style>body{background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);}</style>");
+  
+  // Custom info
+  String customInfo = "<p>🌿 ระบบรดน้ำผักชีฟลั่งอัตโนมัติ</p>";
+  customInfo += "<p>📱 เชื่อมต่อกับ WiFi เพื่อใช้งานระบบ</p>";
+  customInfo += "<p>💧 ระบบเรียบง่าย ใช้งานง่าย</p>";
+  customInfo += "<p>🔗 เข้าใช้งานที่: http://192.168.4.1</p>";
+  wifiManager.setCustomHeadElement(customInfo.c_str());
+  
+  Serial.println("✅ WiFiManager setup completed");
+}
+
+void loadConfig() {
+  // Load configuration from EEPROM
+  int address = 0;
+  EEPROM.get(address, webhookUrl);
+  address += sizeof(webhookUrl);
+  EEPROM.get(address, webhookEnabled);
+  address += sizeof(webhookEnabled);
+  EEPROM.get(address, blinkEmail);
+  address += sizeof(blinkEmail);
+  EEPROM.get(address, blinkPassword);
+  address += sizeof(blinkPassword);
+  EEPROM.get(address, blinkAccountId);
+  address += sizeof(blinkAccountId);
+  EEPROM.get(address, blinkNetworkId);
+  
+  // Validate loaded data
+  if (strlen(webhookUrl) == 0 || webhookUrl[0] == 0xFF) {
+    strcpy(webhookUrl, "");
+    webhookEnabled = false;
+  }
+  
+  if (strlen(blinkEmail) == 0 || blinkEmail[0] == 0xFF) {
+    strcpy(blinkEmail, "");
+    strcpy(blinkPassword, "");
+    strcpy(blinkAccountId, "");
+    strcpy(blinkNetworkId, "");
+    strcpy(blinkCameraId, "");
+  }
+}
+
+void saveConfig() {
+  // Save configuration to EEPROM
+  int address = 0;
+  EEPROM.put(address, webhookUrl);
+  address += sizeof(webhookUrl);
+  EEPROM.put(address, webhookEnabled);
+  address += sizeof(webhookEnabled);
+  EEPROM.put(address, blinkEmail);
+  address += sizeof(blinkEmail);
+  EEPROM.put(address, blinkPassword);
+  address += sizeof(blinkPassword);
+  EEPROM.put(address, blinkAccountId);
+  address += sizeof(blinkAccountId);
+  EEPROM.put(address, blinkNetworkId);
+  EEPROM.commit();
+  Serial.println("📁 Configuration saved to EEPROM");
 }
 
 void loop() {
-  DateTime now = rtc.now();
+  // Check for WiFi reset button (long press)
+  static unsigned long buttonPressTime = 0;
+  if (digitalRead(WIFI_RESET_BUTTON) == LOW) {
+    if (buttonPressTime == 0) {
+      buttonPressTime = millis();
+    } else if (millis() - buttonPressTime > 5000) { // 5 seconds long press
+      Serial.println("🔄 Long press detected - Resetting WiFi and restarting");
+      wifiManager.resetSettings();
+      ESP.restart();
+    }
+  } else {
+    buttonPressTime = 0;
+  }
   
   // Read sensors every 30 seconds
   static unsigned long lastSensorRead = 0;
@@ -172,8 +525,8 @@ void loop() {
     lastSensorRead = millis();
   }
   
-  // Check watering schedules
-  checkWateringSchedules(now);
+  // Check watering schedules (only if RTC available)
+  checkWateringSchedules();
   
   // Smart watering logic
   smartCilantroWatering();
@@ -181,8 +534,8 @@ void loop() {
   // Handle active watering
   handleActiveWatering();
   
-  // Check Blink connection
-  checkBlinkConnection();
+  // System status monitoring
+  // (No external services to check)
   
   // Handle web server
   server.handleClient();
@@ -198,92 +551,79 @@ void loop() {
 }
 
 void readAllSensors() {
-  // Read DHT22
-  temperature = dht.readTemperature();
-  humidity = dht.readHumidity();
+  // Read MH Sensor (single sensor for all zones)
+  int rawValue = analogRead(MH_SENSOR_AO); // อ่านค่า analog จากขา AO
+  bool digitalValue = digitalRead(MH_SENSOR_DO); // อ่านค่า digital จากขา DO
   
-  // Read soil moisture for each zone
-  for (int i = 0; i < RELAY_COUNT; i++) {
-    int rawValue = analogRead(SOIL_MOISTURE_PINS[i]);
-    soilMoisture[i] = map(rawValue, 4095, 0, 0, 100); // Convert to percentage
-    cilantroZones[i].currentMoisture = soilMoisture[i];
-  }
+  // แปลงค่า analog เป็นเปอร์เซ็นต์ความชื้น
+  // MH Sensor: ค่าต่ำ = ดินแห้ง, ค่าสูง = ดินชื้น
+  moisturePercent = map(rawValue, 4095, 0, 0, 100); // 4095 = แห้งสุด, 0 = ชื้นสุด
   
-  // Read light level
-  lightLevel = analogRead(LIGHT_SENSOR_PIN);
-  lightLevel = map(lightLevel, 0, 4095, 0, 100);
+  // อัพเดทข้อมูลให้ zone เดียว
+  soilMoisture[0] = moisturePercent;
+  cilantroZones[0].currentMoisture = moisturePercent;
   
-  // Check for sensor errors
-  if (isnan(temperature) || isnan(humidity)) {
-    Serial.println("⚠️ DHT22 sensor error!");
-    sendWebhook("⚠️ DHT22 sensor error detected", "warning");
-  }
+  Serial.print("🌡️ MH Sensor - AO: ");
+  Serial.print(rawValue);
+  Serial.print(" (");
+  Serial.print(moisturePercent);
+  Serial.print("%) DO: ");
+  Serial.println(digitalValue ? "DRY" : "WET");
   
   // Log sensor data
   logSensorData();
+  
+  // Update LCD debug screen
+  updateLCDDebug();
+  
+  // Update Blink status every 5 minutes
+  static unsigned long lastBlinkUpdate = 0;
+  if (blinkConnected && millis() - lastBlinkUpdate > 300000) { // 5 minutes
+    updateBlinkStatus(getZoneStatus(0), String(moisturePercent));
+    lastBlinkUpdate = millis();
+  }
 }
 
 void smartCilantroWatering() {
-  for (int i = 0; i < RELAY_COUNT; i++) {
-    CilantroZone* zone = &cilantroZones[i];
-    
-    // Skip if currently watering
-    if (relayStates[i]) continue;
-    
-    // Check if zone needs water based on multiple factors
-    bool needsWater = false;
-    String reason = "";
-    
-    // Factor 1: Soil moisture
-    if (zone->currentMoisture < CILANTRO_MOISTURE_MIN) {
-      needsWater = true;
-      reason += "Low soil moisture (" + String(zone->currentMoisture) + "%). ";
-    }
-    
-    // Factor 2: Temperature stress
-    if (temperature > CILANTRO_TEMP_MAX && zone->currentMoisture < zone->targetMoisture) {
-      needsWater = true;
-      reason += "High temperature stress (" + String(temperature) + "°C). ";
-    }
-    
-    // Factor 3: Growth stage requirements
-    float moistureAdjustment = zone->growthStage * 10; // Mature plants need less water
-    int adjustedTarget = zone->targetMoisture - moistureAdjustment;
-    if (zone->currentMoisture < adjustedTarget) {
-      needsWater = true;
-      reason += "Growth stage requirement. ";
-    }
-    
-    // Factor 4: Time since last watering
-    unsigned long timeSinceWatering = millis() - zone->lastWatered;
-    if (timeSinceWatering > 3600000 && zone->currentMoisture < zone->targetMoisture) { // 1 hour
-      needsWater = true;
-      reason += "Extended dry period. ";
-    }
-    
-    // Factor 5: Prevent overwatering
-    if (timeSinceWatering < 1800000) { // 30 minutes
-      needsWater = false;
-      reason = "Recently watered, skipping.";
-    }
-    
-    // Factor 6: Daily watering limit
-    if (wateringCount[i] >= 8) { // Max 8 times per day
-      needsWater = false;
-      reason = "Daily watering limit reached.";
-    }
-    
-    // Execute watering if needed
-    if (needsWater) {
-      int duration = calculateWateringDuration(i);
-      startWatering(i, duration);
-      Serial.println("🌿 Zone " + String(i+1) + " watering started: " + reason);
-      sendWebhook("🌿 Cilantro Zone " + String(i+1) + " watering: " + reason, "info");
-    }
-    
-    zone->needsWater = needsWater;
-    zone->status = needsWater ? "Watering" : getZoneStatus(i);
+  // ใช้เซ็นเซอร์ตัวเดียว - ตรวจสอบความชื้นและรดน้ำตามเงื่อนไข
+  CilantroZone* zone = &cilantroZones[0];
+  
+  // Skip if currently watering
+  if (relayStates[0]) return;
+  
+  // ตรวจสอบว่าต้องรดน้ำหรือไม่
+  bool needsWater = false;
+  String reason = "";
+  
+  // เงื่อนไขการรดน้ำ: ความชื้นต่ำกว่า 30%
+  if (moisturePercent < MOISTURE_THRESHOLD_LOW) {
+    needsWater = true;
+    reason += "ความชื้นต่ำ (" + String(moisturePercent) + "% < " + String(MOISTURE_THRESHOLD_LOW) + "%). ";
   }
+    
+  // ป้องกันการรดน้ำบ่อยเกินไป (ห่างกัน 30 นาที)
+  unsigned long timeSinceWatering = millis() - zone->lastWatered;
+  if (timeSinceWatering < 1800000) { // 30 minutes
+    needsWater = false;
+    reason = "เพิ่งรดน้ำไปแล้ว, รอก่อน.";
+  }
+  
+  // จำกัดการรดน้ำต่อวัน (สูงสุด 6 ครั้ง/วัน)
+  if (wateringCount[0] >= 6) {
+    needsWater = false;
+    reason = "รดน้ำครบจำนวนแล้ววันนี้.";
+  }
+  
+  // รดน้ำหากจำเป็น
+  if (needsWater) {
+    int duration = calculateWateringDuration(0);
+    startWatering(0, duration);
+    Serial.println("💧 เริ่มรดน้ำ: " + reason);
+    sendWebhook("💧 เริ่มรดน้ำผักชีฟลั่ง: " + reason, "info");
+  }
+  
+  zone->needsWater = needsWater;
+  zone->status = needsWater ? "กำลังรดน้ำ" : getZoneStatus(0);
 }
 
 int calculateWateringDuration(int zoneIndex) {
@@ -296,11 +636,17 @@ int calculateWateringDuration(int zoneIndex) {
   int moistureDeficit = zone->targetMoisture - zone->currentMoisture;
   float durationMultiplier = 1.0 + (moistureDeficit / 20.0); // +5% per 1% deficit
   
-  // Adjust based on temperature
-  if (temperature > CILANTRO_TEMP_MAX) {
-    durationMultiplier *= 1.2; // 20% longer in hot weather
-  } else if (temperature < CILANTRO_TEMP_MIN) {
-    durationMultiplier *= 0.8; // 20% shorter in cool weather
+  // Adjust based on time of day (if RTC available)
+  if (rtcAvailable) {
+    DateTime now = rtc.now();
+    if (now.hour() >= 10 && now.hour() <= 16) {
+      durationMultiplier *= 1.1; // 10% longer during midday heat
+    } else if (now.hour() <= 6 || now.hour() >= 20) {
+      durationMultiplier *= 0.9; // 10% shorter during cool periods
+    }
+  } else {
+    // Without RTC, use standard duration
+    Serial.println("ℹ️ Using standard watering duration (no RTC)");
   }
   
   // Adjust based on growth stage
@@ -317,18 +663,23 @@ int calculateWateringDuration(int zoneIndex) {
 String getZoneStatus(int zoneIndex) {
   CilantroZone* zone = &cilantroZones[zoneIndex];
   
-  if (zone->currentMoisture >= zone->targetMoisture) {
+  if (zone->currentMoisture >= MOISTURE_THRESHOLD_HIGH) {
     return "Optimal";
-  } else if (zone->currentMoisture >= CILANTRO_MOISTURE_MIN) {
+  } else if (zone->currentMoisture >= 50) {
     return "Good";
-  } else if (zone->currentMoisture >= 30) {
+  } else if (zone->currentMoisture >= MOISTURE_THRESHOLD_LOW) {
     return "Dry";
   } else {
     return "Critical";
   }
 }
 
-void checkWateringSchedules(DateTime now) {
+void checkWateringSchedules() {
+  if (!rtcAvailable) {
+    return; // Skip scheduled watering if no RTC
+  }
+  
+  DateTime now = rtc.now();
   int scheduleCount = sizeof(cilantroSchedules) / sizeof(cilantroSchedules[0]);
   
   for (int i = 0; i < scheduleCount; i++) {
@@ -351,9 +702,6 @@ void checkWateringSchedules(DateTime now) {
 void startWatering(int zoneIndex, int durationMinutes) {
   if (zoneIndex < 0 || zoneIndex >= RELAY_COUNT) return;
   
-  // Arm Blink camera for monitoring
-  armBlinkCamera();
-  
   digitalWrite(relayPins[zoneIndex], LOW); // Turn on relay (active LOW)
   relayStates[zoneIndex] = true;
   wateringEndTime[zoneIndex] = millis() + (durationMinutes * 60000UL);
@@ -361,6 +709,20 @@ void startWatering(int zoneIndex, int durationMinutes) {
   cilantroZones[zoneIndex].lastWatered = millis();
   
   Serial.println("💧 Started watering Zone " + String(zoneIndex + 1) + " for " + String(durationMinutes) + " minutes");
+  
+  // Update LCD
+  if (lcdAvailable) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Watering...");
+    lcd.setCursor(0, 1);
+    lcd.print(String(durationMinutes) + " minutes");
+  }
+  
+  // Update Blink
+  if (blinkConnected) {
+    updateBlinkStatus("กำลังรดน้ำ", String(moisturePercent));
+  }
   
   // Send webhook notification
   sendWebhook("💧 Zone " + String(zoneIndex + 1) + " watering started (" + String(durationMinutes) + " min)", "info");
@@ -375,98 +737,40 @@ void stopWatering(int zoneIndex) {
   
   Serial.println("🛑 Stopped watering Zone " + String(zoneIndex + 1));
   
-  // Disarm Blink camera
-  disarmBlinkCamera();
+  // Update LCD
+  if (lcdAvailable) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Watering Done");
+    lcd.setCursor(0, 1);
+    lcd.print("Moisture: " + String(moisturePercent) + "%");
+    delay(2000);
+  }
+  
+  // Update Blink
+  if (blinkConnected) {
+    updateBlinkStatus("รดน้ำเสร็จแล้ว", String(moisturePercent));
+  }
   
   // Send webhook notification
   sendWebhook("🛑 Zone " + String(zoneIndex + 1) + " watering completed", "info");
 }
 
 void handleActiveWatering() {
-  for (int i = 0; i < RELAY_COUNT; i++) {
-    if (relayStates[i] && millis() >= wateringEndTime[i]) {
-      stopWatering(i);
+  // ตรวจสอบการรดน้ำที่กำลังทำงาน
+  if (relayStates[0]) {
+    // หยุดรดน้ำเมื่อ: 1) เวลาครบ หรือ 2) ความชื้นถึง 70%
+    if (millis() >= wateringEndTime[0] || moisturePercent >= MOISTURE_THRESHOLD_HIGH) {
+      if (moisturePercent >= MOISTURE_THRESHOLD_HIGH) {
+        Serial.println("💧 หยุดรดน้ำ: ความชื้นถึงเป้าหมาย " + String(moisturePercent) + "%");
+        sendWebhook("💧 หยุดรดน้ำ: ความชื้นถึง " + String(moisturePercent) + "%", "info");
+      }
+      stopWatering(0);
     }
   }
 }
 
-// Blink Camera Integration
-void authenticateBlink() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  
-  HTTPClient http;
-  http.begin(blinkAuthUrl);
-  http.addHeader("Content-Type", "application/json");
-  
-  DynamicJsonDocument doc(256);
-  doc["email"] = blinkEmail;
-  doc["password"] = blinkPassword;
-  
-  String requestBody;
-  serializeJson(doc, requestBody);
-  
-  int httpCode = http.POST(requestBody);
-  
-  if (httpCode == 200) {
-    String response = http.getString();
-    DynamicJsonDocument responseDoc(1024);
-    deserializeJson(responseDoc, response);
-    
-    blinkAuthToken = responseDoc["auth"]["token"].as<String>();
-    lastBlinkAuth = millis();
-    Serial.println("✅ Blink authentication successful");
-    sendWebhook("📷 Blink camera connected successfully", "info");
-  } else {
-    Serial.print("❌ Blink authentication failed: ");
-    Serial.println(httpCode);
-  }
-  
-  http.end();
-}
 
-void checkBlinkConnection() {
-  if (millis() - lastBlinkAuth > BLINK_AUTH_INTERVAL) {
-    authenticateBlink();
-  }
-}
-
-void armBlinkCamera() {
-  if (blinkAuthToken.isEmpty() || WiFi.status() != WL_CONNECTED) return;
-  
-  HTTPClient http;
-  String url = blinkArmUrl + String(blinkNetworkId) + "/camera/" + String(blinkCameraId) + "/enable";
-  http.begin(url);
-  http.addHeader("TOKEN_AUTH", blinkAuthToken);
-  
-  int httpCode = http.POST("");
-  if (httpCode == 200) {
-    Serial.println("🔒 Blink camera armed for monitoring");
-  } else {
-    Serial.print("❌ Failed to arm Blink camera: ");
-    Serial.println(httpCode);
-  }
-  
-  http.end();
-}
-
-void disarmBlinkCamera() {
-  if (blinkAuthToken.isEmpty() || WiFi.status() != WL_CONNECTED) return;
-  
-  HTTPClient http;
-  String url = blinkDisarmUrl + String(blinkNetworkId) + "/camera/" + String(blinkCameraId) + "/disable";
-  http.begin(url);
-  http.addHeader("TOKEN_AUTH", blinkAuthToken);
-  
-  int httpCode = http.POST("");
-  if (httpCode == 200) {
-    Serial.println("🔓 Blink camera disarmed");
-  } else {
-    Serial.print("❌ Failed to disarm Blink camera: ");
-    Serial.println(httpCode);
-  }
-  
-  http.end();
-}
 
 void sendWebhook(String message, String level) {
   if (!webhookEnabled || WiFi.status() != WL_CONNECTED) return;
@@ -477,12 +781,10 @@ void sendWebhook(String message, String level) {
   
   DynamicJsonDocument doc(512);
   doc["timestamp"] = getCurrentTime();
-  doc["system"] = "Cilantro Watering System";
+  doc["system"] = "Simple Cilantro Watering System";
   doc["message"] = message;
   doc["level"] = level;
   doc["ip"] = WiFi.localIP().toString();
-  doc["temperature"] = temperature;
-  doc["humidity"] = humidity;
   
   JsonArray moistures = doc.createNestedArray("soil_moisture");
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -501,20 +803,27 @@ void sendWebhook(String message, String level) {
 }
 
 String getCurrentTime() {
-  DateTime now = rtc.now();
-  return String(now.year()) + "-" + 
-         String(now.month()) + "-" + 
-         String(now.day()) + " " + 
-         String(now.hour()) + ":" + 
-         String(now.minute()) + ":" + 
-         String(now.second());
+  if (rtcAvailable) {
+    DateTime now = rtc.now();
+    return String(now.year()) + "-" + 
+           String(now.month()) + "-" + 
+           String(now.day()) + " " + 
+           String(now.hour()) + ":" + 
+           String(now.minute()) + ":" + 
+           String(now.second());
+  } else {
+    // Fallback to system uptime
+    unsigned long uptimeSeconds = millis() / 1000;
+    unsigned long hours = uptimeSeconds / 3600;
+    unsigned long minutes = (uptimeSeconds % 3600) / 60;
+    unsigned long seconds = uptimeSeconds % 60;
+    return "UPTIME " + String(hours) + ":" + 
+           String(minutes) + ":" + String(seconds);
+  }
 }
 
 void logSensorData() {
   Serial.println("📊 Sensor Data:");
-  Serial.println("  Temperature: " + String(temperature) + "°C");
-  Serial.println("  Humidity: " + String(humidity) + "%");
-  Serial.println("  Light Level: " + String(lightLevel) + "%");
   
   for (int i = 0; i < RELAY_COUNT; i++) {
     Serial.println("  Zone " + String(i+1) + " Moisture: " + String(soilMoisture[i]) + "% - " + cilantroZones[i].status);
@@ -529,14 +838,28 @@ void setupWebServer() {
   server.on("/api/zones", handleZones);
   server.on("/api/schedule", HTTP_POST, handleScheduleUpdate);
   
-  // Blink integration endpoints
-  server.on("/api/blink/test", HTTP_POST, handleBlinkTest);
-  server.on("/api/blink/water", HTTP_POST, handleBlinkWater);
-  server.on("/api/blink/status", handleBlinkStatus);
-  
-  // Advanced endpoints
+  // System endpoints
   server.on("/api/settings", HTTP_POST, handleSettingsUpdate);
   server.on("/api/emergency", HTTP_POST, handleEmergencyStop);
+  server.on("/api/wifi/reset", HTTP_POST, handleWiFiReset);
+  server.on("/api/blink/test", HTTP_POST, handleBlinkTest);
+}
+
+void handleWiFiReset() {
+  sendWebhook("🔄 WiFi reset requested via web interface", "warning");
+  server.send(200, "application/json", "{\"status\":\"wifi_reset_scheduled\"}");
+  delay(1000);
+  wifiManager.resetSettings();
+  ESP.restart();
+}
+
+void handleBlinkTest() {
+  if (blinkConnected) {
+    updateBlinkStatus("ทดสอบระบบ", String(moisturePercent));
+    server.send(200, "text/plain", "Blink test sent");
+  } else {
+    server.send(400, "text/plain", "Blink not connected");
+  }
 }
 
 void handleRoot() {
@@ -547,11 +870,13 @@ void handleRoot() {
 void handleStatus() {
   DynamicJsonDocument doc(2048);
   doc["timestamp"] = getCurrentTime();
-  doc["temperature"] = temperature;
-  doc["humidity"] = humidity;
-  doc["light_level"] = lightLevel;
   doc["wifi_strength"] = WiFi.RSSI();
   doc["uptime"] = millis() / 1000;
+  doc["free_memory"] = ESP.getFreeHeap();
+  doc["total_watering_today"] = wateringCount[0];
+  doc["rtc_available"] = rtcAvailable;
+  doc["lcd_available"] = lcdAvailable;
+  doc["blink_connected"] = blinkConnected;
   
   JsonArray zones = doc.createNestedArray("zones");
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -564,10 +889,11 @@ void handleStatus() {
     zone["status"] = cilantroZones[i].status;
     zone["growth_stage"] = cilantroZones[i].growthStage;
     zone["watering_count"] = wateringCount[i];
+    zone["last_watered"] = cilantroZones[i].lastWatered;
   }
   
-  doc["blink_connected"] = !blinkAuthToken.isEmpty();
   doc["webhook_enabled"] = webhookEnabled;
+  doc["system_status"] = rtcAvailable ? "running" : "running_no_rtc";
   
   String response;
   serializeJson(doc, response);
@@ -612,42 +938,7 @@ void handleZones() {
   server.send(200, "application/json", response);
 }
 
-void handleBlinkTest() {
-  armBlinkCamera();
-  delay(2000);
-  disarmBlinkCamera();
-  server.send(200, "application/json", "{\"status\":\"blink_test_completed\"}");
-}
 
-void handleBlinkWater() {
-  int zone = 0; // Default to zone 0
-  if (server.hasArg("zone")) {
-    zone = server.arg("zone").toInt();
-  }
-  
-  if (zone >= 0 && zone < RELAY_COUNT) {
-    startWatering(zone, 3); // 3 minutes default
-    server.send(200, "application/json", "{\"status\":\"watering_started\",\"zone\":" + String(zone) + "}");
-  } else {
-    server.send(400, "application/json", "{\"error\":\"invalid_zone\"}");
-  }
-}
-
-void handleBlinkStatus() {
-  DynamicJsonDocument doc(512);
-  doc["blink_connected"] = !blinkAuthToken.isEmpty();
-  doc["camera_armed"] = false; // Would need to track this state
-  doc["system_status"] = "running";
-  doc["zones_watering"] = 0;
-  
-  for (int i = 0; i < RELAY_COUNT; i++) {
-    if (relayStates[i]) doc["zones_watering"] = doc["zones_watering"].as<int>() + 1;
-  }
-  
-  String response;
-  serializeJson(doc, response);
-  server.send(200, "application/json", response);
-}
 
 void handleEmergencyStop() {
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -662,6 +953,12 @@ void handleEmergencyStop() {
 
 void handleSettingsUpdate() {
   // Handle settings updates from web interface
+  if (server.hasArg("webhook_url")) {
+    strncpy(webhookUrl, server.arg("webhook_url").c_str(), sizeof(webhookUrl));
+    webhookEnabled = server.arg("webhook_enabled").toInt();
+    saveConfig();
+    sendWebhook("🌐 System settings updated", "info");
+  }
   server.send(200, "application/json", "{\"status\":\"settings_updated\"}");
 }
 
@@ -772,26 +1069,34 @@ String generateMainPage() {
     <div class="container">
         <div class="header">
             <h1>🌿 ระบบรดน้ำผักชีฟลั่งอัตโนมัติ</h1>
-            <p>Smart Cilantro Watering System with Blink Camera Integration</p>
-            <p><span class="status-indicator status-optimal"></span>Connected to Blink Security</p>
+            <p>Simple Cilantro Watering System - เรียบง่าย ใช้งานง่าย</p>
+            <p><span class="status-indicator status-optimal"></span>ระบบพร้อมใช้งาน</p>
         </div>
 
         <div class="stats-grid">
             <div class="stat-card">
-                <h3>🌡️ อุณหภูมิ</h3>
-                <div id="temperature">--°C</div>
+                <h3>📶 WiFi Signal</h3>
+                <div id="wifiSignal">-- dBm</div>
             </div>
             <div class="stat-card">
-                <h3>💧 ความชื้นอากาศ</h3>
-                <div id="humidity">--%</div>
+                <h3>⏱️ System Uptime</h3>
+                <div id="uptime">--</div>
             </div>
             <div class="stat-card">
-                <h3>☀️ ระดับแสง</h3>
-                <div id="lightLevel">--%</div>
+                <h3>🕒 Current Time</h3>
+                <div id="currentTime">--:--</div>
             </div>
             <div class="stat-card">
-                <h3>📷 Blink Status</h3>
-                <div id="blinkStatus">Connected</div>
+                <h3>💧 Total Watering Today</h3>
+                <div id="totalWatering">-- ครั้ง</div>
+            </div>
+            <div class="stat-card">
+                <h3>💾 Free Memory</h3>
+                <div id="freeMemory">-- KB</div>
+            </div>
+            <div class="stat-card">
+                <h3>🌐 System Status</h3>
+                <div id="systemStatus">--</div>
             </div>
         </div>
 
@@ -801,11 +1106,34 @@ String generateMainPage() {
 
         <div class="controls">
             <h3>🎛️ การควบคุม</h3>
-            <button onclick="manualWater(0, 3)">💧 รดน้ำโซน 1 (3 นาที)</button>
-            <button onclick="manualWater(1, 5)">💧 รดน้ำโซน 2 (5 นาที)</button>
-            <button onclick="manualWater(2, 7)">💧 รดน้ำโซน 3 (7 นาที)</button>
-            <button onclick="testBlinkCamera()">📷 ทดสอบ Blink Camera</button>
+            <button onclick="manualWater(0, 3)">💧 รดน้ำ 3 นาที</button>
+            <button onclick="manualWater(0, 5)">💧 รดน้ำ 5 นาที</button>
+            <button onclick="manualWater(0, 10)">💧 รดน้ำ 10 นาที</button>
+            <button onclick="showSystemInfo()">📊 ข้อมูลระบบ</button>
+            <button onclick="resetWiFi()" class="emergency">🔄 รีเซ็ต WiFi</button>
             <button onclick="emergencyStop()" class="emergency">🚨 หยุดฉุกเฉิน</button>
+        </div>
+
+        <!-- System Info Modal -->
+        <div id="systemModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+            <div style="position:relative; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(255,255,255,0.95); padding:30px; border-radius:15px; max-width:600px; width:90%;">
+                <h2>📊 ข้อมูลระบบ</h2>
+                <div id="systemInfoContent" style="text-align:left; line-height:1.8;">
+                    <p><strong>📶 WiFi:</strong> <span id="modalWifiSignal">--</span> dBm</p>
+                    <p><strong>💾 หน่วยความจำว่าง:</strong> <span id="modalFreeMemory">--</span> KB</p>
+                    <p><strong>⏱️ เวลาทำงาน:</strong> <span id="modalUptime">--</span></p>
+                    <p><strong>🌐 IP Address:</strong> <span id="modalIpAddress">--</span></p>
+                    <p><strong>💧 รดน้ำวันนี้:</strong> <span id="modalTotalWatering">--</span> ครั้ง</p>
+                    <p><strong>🕒 เวลาปัจจุบัน:</strong> <span id="modalCurrentTime">--</span></p>
+                    <p><strong>⏰ RTC Status:</strong> <span id="modalRtcStatus">--</span></p>
+                    <hr>
+                    <h3>⚙️ ตั้งค่า Webhook (ทางเลือก)</h3>
+                    <p><label>Webhook URL:</label><br><input type="url" id="webhookUrlInput" style="width:100%; padding:8px; margin:5px 0;" placeholder="https://example.com/webhook"></p>
+                    <p><label><input type="checkbox" id="webhookEnabledInput"> เปิดใช้ Webhook</label></p>
+                </div>
+                <button type="button" onclick="saveSystemConfig()" style="background:#4CAF50; color:white; padding:10px 20px; border:none; border-radius:5px; margin:5px;">💾 บันทึก</button>
+                <button type="button" onclick="closeSystemModal()" style="background:#f44336; color:white; padding:10px 20px; border:none; border-radius:5px; margin:5px;">❌ ปิด</button>
+            </div>
         </div>
     </div>
 
@@ -814,13 +1142,27 @@ String generateMainPage() {
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('temperature').textContent = data.temperature.toFixed(1) + '°C';
-                    document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
-                    document.getElementById('lightLevel').textContent = data.light_level + '%';
-                    document.getElementById('blinkStatus').textContent = data.blink_connected ? 'Connected' : 'Disconnected';
+                    document.getElementById('wifiSignal').textContent = data.wifi_strength + ' dBm';
+                    document.getElementById('uptime').textContent = formatUptime(data.uptime);
+                    document.getElementById('currentTime').textContent = data.timestamp.split(' ')[1];
+                    document.getElementById('totalWatering').textContent = data.total_watering_today + ' ครั้ง';
+                    document.getElementById('freeMemory').textContent = Math.round(data.free_memory / 1024) + ' KB';
+                    let statusText = '🔴 ขัดข้อง';
+                    if (data.system_status === 'running') {
+                        statusText = '🟢 ทำงานปกติ';
+                    } else if (data.system_status === 'running_no_rtc') {
+                        statusText = '🟡 ทำงาน (ไม่มี RTC)';
+                    }
+                    document.getElementById('systemStatus').textContent = statusText;
                     
                     updateZones(data.zones);
                 });
+        }
+
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return hours + 'h ' + minutes + 'm';
         }
 
         function updateZones(zones) {
@@ -835,12 +1177,12 @@ String generateMainPage() {
                     <div class="zone-card">
                         <h3>${zone.name}</h3>
                         <p><span class="status-indicator ${statusClass}"></span>${zone.status}</p>
-                        <p>ความชื้นดิน: ${zone.moisture}%</p>
+                        <p>ความชื้นดิน: <strong>${zone.moisture}%</strong></p>
                         <div class="progress-bar">
                             <div class="progress-fill" style="width: ${moisturePercent}%"></div>
                         </div>
-                        <p>เป้าหมาย: ${zone.target_moisture}%</p>
-                        <p>ระยะการเจริญเติบโต: ${(zone.growth_stage * 100).toFixed(0)}%</p>
+                        <p>🔴 รดน้ำเมื่อ: < 30%</p>
+                        <p>🟢 หยุดเมื่อ: 70%</p>
                         <p>จำนวนรดน้ำวันนี้: ${zone.watering_count} ครั้ง</p>
                         ${zone.watering ? '<p style="color: #4CAF50;">🚿 กำลังรดน้ำ...</p>' : ''}
                     </div>
@@ -891,6 +1233,45 @@ String generateMainPage() {
                         alert('หยุดการรดน้ำฉุกเฉินเรียบร้อย!');
                         updateStatus();
                     });
+            }
+        }
+
+        function showSystemInfo() {
+            // Update modal with current data
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('modalWifiSignal').textContent = data.wifi_strength;
+                    document.getElementById('modalFreeMemory').textContent = Math.round(data.free_memory / 1024);
+                    document.getElementById('modalUptime').textContent = formatUptime(data.uptime);
+                    document.getElementById('modalTotalWatering').textContent = data.total_watering_today;
+                    document.getElementById('modalCurrentTime').textContent = data.timestamp;
+                    document.getElementById('modalRtcStatus').textContent = data.rtc_available ? '✅ พร้อมใช้งาน' : '⚠️ ไม่พบ RTC';
+                    document.getElementById('systemModal').style.display = 'block';
+                });
+        }
+
+        function closeSystemModal() {
+            document.getElementById('systemModal').style.display = 'none';
+        }
+
+        function saveSystemConfig() {
+            const formData = new FormData();
+            formData.append('webhook_url', document.getElementById('webhookUrlInput').value);
+            formData.append('webhook_enabled', document.getElementById('webhookEnabledInput').checked ? '1' : '0');
+
+            fetch('/api/settings', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    alert('บันทึกการตั้งค่าเรียบร้อย!');
+                    closeSystemModal();
+                    updateStatus();
+                });
+        }
+
+        function resetWiFi() {
+            if (confirm('คุณแน่ใจหรือไม่ที่จะรีเซ็ต WiFi? ระบบจะรีสตาร์ทและเปิด Hotspot สำหรับตั้งค่าใหม่')) {
+                alert('กดปุ่ม Boot บน ESP32 ค้างไว้ 5 วินาที เพื่อรีเซ็ต WiFi หรือรีสตาร์ทอุปกรณ์');
             }
         }
 

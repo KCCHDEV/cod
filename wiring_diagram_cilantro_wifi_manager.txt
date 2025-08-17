@@ -1,0 +1,250 @@
+ESP32 Cilantro Watering System - Wiring Diagram (WiFi Manager Version)
+====================================================================
+
+🌿 UPDATED SYSTEM - DHT22 & LIGHT SENSORS REMOVED
+- WiFi Manager for easy network configuration
+- Blink Camera integration via web interface
+- Simplified sensor setup (soil moisture only)
+
+Hardware Components:
+===================
+✅ ESP32 Development Board
+✅ DS3231 RTC Module
+✅ 3x Soil Moisture Sensors
+✅ 3x Relay Modules (5V with optocouplers)
+✅ 3x Water Pumps (12V/5V)
+✅ Status LED
+✅ Optional: Flow Sensor
+❌ DHT22 Sensor (REMOVED)
+❌ Light Sensor/LDR (REMOVED)
+
+Pin Connections:
+===============
+
+ESP32 Development Board:
+-----------------------
+VIN  ──────── +12V Power Supply (for pumps)
+GND  ──────── Ground (common ground)
+3.3V ──────── +3.3V Rail (sensors)
+5V   ──────── +5V Rail (relay modules)
+
+Digital Pins:
+------------
+GPIO 0  ──────── Boot Button (built-in) - WiFi Reset Function
+GPIO 2  ──────── Status LED (Anode) ──── 220Ω Resistor ──── GND
+GPIO 4  ──────── [FREE PIN - DHT22 REMOVED] 
+GPIO 5  ──────── Relay Module 1 (IN1) - Zone 1 Control
+GPIO 18 ──────── Relay Module 2 (IN2) - Zone 2 Control  
+GPIO 19 ──────── Relay Module 3 (IN3) - Zone 3 Control
+GPIO 21 ──────── Flow Sensor (Data) [Optional]
+GPIO 22 ──────── RTC SDA (I2C Data)
+GPIO 23 ──────── RTC SCL (I2C Clock)
+
+Analog Pins:
+-----------
+GPIO 34 ──────── Soil Moisture Sensor 3 (Analog Output)
+GPIO 35 ──────── [FREE PIN - LIGHT SENSOR REMOVED]
+GPIO 36 ──────── Soil Moisture Sensor 1 (Analog Output)
+GPIO 39 ──────── Soil Moisture Sensor 2 (Analog Output)
+
+DS3231 RTC Module:
+-----------------
+VCC ──────── ESP32 3.3V
+GND ──────── ESP32 GND
+SDA ──────── ESP32 GPIO 22
+SCL ──────── ESP32 GPIO 23
+
+Soil Moisture Sensors (x3):
+---------------------------
+Sensor 1 (Zone 1):
+  VCC ────── ESP32 3.3V
+  GND ────── ESP32 GND
+  A0  ────── ESP32 GPIO 36
+
+Sensor 2 (Zone 2):
+  VCC ────── ESP32 3.3V
+  GND ────── ESP32 GND
+  A0  ────── ESP32 GPIO 39
+
+Sensor 3 (Zone 3):
+  VCC ────── ESP32 3.3V
+  GND ────── ESP32 GND
+  A0  ────── ESP32 GPIO 34
+
+Light Sensor (LDR): [REMOVED]
+-------------------
+No longer needed - time-based watering logic used instead
+
+Relay Modules (x3):
+------------------
+Relay Module 1 (Zone 1):
+  VCC ────── ESP32 5V
+  GND ────── ESP32 GND
+  IN1 ────── ESP32 GPIO 5
+  COM ────── +12V Power Supply
+  NO  ────── Water Pump 1 (+)
+  NC  ────── Not Connected
+
+Relay Module 2 (Zone 2):
+  VCC ────── ESP32 5V
+  GND ────── ESP32 GND
+  IN2 ────── ESP32 GPIO 18
+  COM ────── +12V Power Supply
+  NO  ────── Water Pump 2 (+)
+  NC  ────── Not Connected
+
+Relay Module 3 (Zone 3):
+  VCC ────── ESP32 5V
+  GND ────── ESP32 GND
+  IN3 ────── ESP32 GPIO 19
+  COM ────── +12V Power Supply
+  NO  ────── Water Pump 3 (+)
+  NC  ────── Not Connected
+
+Water Pumps (x3):
+----------------
+Pump 1: (+) ──── Relay 1 NO, (-) ──── Power Supply GND
+Pump 2: (+) ──── Relay 2 NO, (-) ──── Power Supply GND  
+Pump 3: (+) ──── Relay 3 NO, (-) ──── Power Supply GND
+
+Optional Flow Sensor:
+--------------------
+VCC ──────── ESP32 3.3V
+GND ──────── ESP32 GND
+Data ──────── ESP32 GPIO 21
+
+Power Supply Connections:
+========================
+
+12V Power Supply:
+----------------
+(+) ─── Relay COM pins (all 3 relays)
+(-) ─── Water Pump (-) pins (all 3 pumps)
+(-) ─── ESP32 GND (common ground)
+
+ESP32 Power:
+-----------
+USB Cable ─── ESP32 (for development)
+OR
+External 5V ─── ESP32 VIN pin ─── GND
+
+Voltage Levels:
+==============
+- ESP32 Logic: 3.3V
+- Soil Sensors: 3.3V  
+- RTC Module: 3.3V
+- Relay Modules: 5V logic (3.3V compatible)
+- Water Pumps: 12V
+- Status LED: 3.3V with current limiting resistor
+
+WiFi Manager Features:
+=====================
+
+Captive Portal Access:
+- Hotspot Name: "CilantroWatering-Setup"
+- Password: "cilantro123"
+- IP Address: 192.168.4.1
+
+WiFi Reset Methods:
+1. Hold Boot button (GPIO 0) for 5+ seconds
+2. Use web interface reset button
+3. Power cycle while holding Boot button
+
+Configuration Storage:
+- WiFi credentials: ESP32 Flash memory
+- Blink settings: ESP32 EEPROM
+- System settings: ESP32 EEPROM
+
+System Status Indicators:
+========================
+
+Status LED (GPIO 2):
+- Solid ON: System starting up
+- Slow Blink (2s): Normal operation, WiFi connected
+- Fast Blink (0.5s): WiFi connecting/setup mode
+- OFF: System error or power issue
+
+Serial Monitor Messages:
+- "✅ WiFi connected! IP: xxx.xxx.xxx.xxx"
+- "🌐 Web server started"
+- "🌿 Cilantro Watering System Ready!"
+- "💧 Started watering Zone X for Y minutes"
+- "📷 Blink camera armed/disarmed"
+
+Safety Considerations:
+=====================
+
+Electrical Safety:
+- Use proper 12V power supply with adequate current rating
+- Ensure all connections are secure and insulated
+- Use optocoupler-based relay modules for isolation
+- Common ground all components properly
+
+Water Safety:
+- Keep all electronics away from water
+- Use waterproof connectors for outdoor sensors
+- Install proper drainage around equipment
+- Use GFCI protection for AC power
+
+Component Protection:
+- Add 220Ω resistor for status LED
+- Ensure relay modules can handle pump current
+- Add flyback diodes across pump motors
+- Proper grounding for all components
+
+Installation Tips:
+=================
+
+1. Mount ESP32 in weatherproof enclosure
+2. Use shielded cable for long sensor runs
+3. Install sensors at appropriate soil depth (2-3 inches)
+4. Ensure reliable WiFi signal at installation location
+5. Test all connections before final installation
+6. Configure system indoors before outdoor deployment
+
+Troubleshooting Connections:
+===========================
+
+No WiFi Connection:
+- Check if hotspot "CilantroWatering-Setup" appears
+- Verify Boot button (GPIO 0) is connected properly
+- Reset WiFi credentials using Boot button
+
+Sensors Not Reading:
+- Verify 3.3V power to all sensors
+- Check analog pin connections (36, 39, 34)
+- Ensure proper grounding
+
+Relays Not Switching:
+- Verify 5V power to relay modules
+- Check control pin connections (5, 18, 19)
+- Test relay activation with multimeter
+
+RTC Not Working:
+- Verify I2C connections (SDA=22, SCL=23)
+- Check 3.3V power to RTC module
+- Install backup battery in RTC
+
+System Improvements:
+===================
+
+Available Pins for Future Expansion:
+- GPIO 4: [Free after DHT22 removal]
+- GPIO 35: [Free after light sensor removal]
+- GPIO 12, 13, 14, 15, 16, 17: Available for additional sensors
+- GPIO 25, 26, 27: Available for PWM control or additional analog inputs
+
+Possible Enhancements:
+- Add pH sensor on GPIO 4
+- Add temperature sensor (DS18B20) on GPIO 35
+- Add additional soil moisture sensors
+- Implement PWM pump speed control
+- Add rain sensor for automatic watering suspension
+- Add water level sensors for reservoir monitoring
+- Implement solar panel charging system
+
+Network Features:
+- OTA (Over-The-Air) updates
+- MQTT integration for IoT platforms
+- Remote monitoring via cloud services
+- Integration with home automation systems
