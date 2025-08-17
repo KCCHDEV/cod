@@ -507,6 +507,9 @@ void EnhancedSystemBase::setupWebServer() {
   webServer.on("/api/reset", handleAPIReset);
   webServer.on("/api/blink", handleAPIBlink);
   
+  // Setup device test handlers
+  setupDeviceTestHandlers();
+  
   // Captive portal
   webServer.onNotFound(handleNotFound);
 }

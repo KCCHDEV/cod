@@ -280,6 +280,7 @@ void handleRoot() {
         <a href="/system">ตั้งค่าระบบ</a>
         <a href="/blink">Blink Integration</a>
         <a href="/status">สถานะระบบ</a>
+        <a href="/device-test">ทดสอบอุปกรณ์</a>
     </div>
     
     <div class="content">
@@ -396,13 +397,14 @@ void handleNetworkConfig() {
         <p>จัดการการเชื่อมต่อ WiFi และ Hotspot</p>
     </div>
     
-    <div class="nav">
-        <a href="/">หน้าแรก</a>
-        <a href="/network" class="active">ตั้งค่าเครือข่าย</a>
-        <a href="/system">ตั้งค่าระบบ</a>
-        <a href="/blink">Blink Integration</a>
-        <a href="/status">สถานะระบบ</a>
-    </div>
+         <div class="nav">
+         <a href="/">หน้าแรก</a>
+         <a href="/network" class="active">ตั้งค่าเครือข่าย</a>
+         <a href="/system">ตั้งค่าระบบ</a>
+         <a href="/blink">Blink Integration</a>
+         <a href="/status">สถานะระบบ</a>
+         <a href="/device-test">ทดสอบอุปกรณ์</a>
+     </div>
     
     <div class="content">
 )";
@@ -525,13 +527,14 @@ void handleSystemConfig() {
         <p>จัดการการตั้งค่าทั่วไปของระบบ</p>
     </div>
     
-    <div class="nav">
-        <a href="/">หน้าแรก</a>
-        <a href="/network">ตั้งค่าเครือข่าย</a>
-        <a href="/system" class="active">ตั้งค่าระบบ</a>
-        <a href="/blink">Blink Integration</a>
-        <a href="/status">สถานะระบบ</a>
-    </div>
+         <div class="nav">
+         <a href="/">หน้าแรก</a>
+         <a href="/network">ตั้งค่าเครือข่าย</a>
+         <a href="/system" class="active">ตั้งค่าระบบ</a>
+         <a href="/blink">Blink Integration</a>
+         <a href="/status">สถานะระบบ</a>
+         <a href="/device-test">ทดสอบอุปกรณ์</a>
+     </div>
     
     <div class="content">
 )";
@@ -652,13 +655,14 @@ void handleBlinkConfig() {
         <p>ตั้งค่าการเชื่อมต่อกับ Blink Cloud</p>
     </div>
     
-    <div class="nav">
-        <a href="/">หน้าแรก</a>
-        <a href="/network">ตั้งค่าเครือข่าย</a>
-        <a href="/system">ตั้งค่าระบบ</a>
-        <a href="/blink" class="active">Blink Integration</a>
-        <a href="/status">สถานะระบบ</a>
-    </div>
+         <div class="nav">
+         <a href="/">หน้าแรก</a>
+         <a href="/network">ตั้งค่าเครือข่าย</a>
+         <a href="/system">ตั้งค่าระบบ</a>
+         <a href="/blink" class="active">Blink Integration</a>
+         <a href="/status">สถานะระบบ</a>
+         <a href="/device-test">ทดสอบอุปกรณ์</a>
+     </div>
     
     <div class="content">
 )";
@@ -767,13 +771,14 @@ void handleSystemInfo() {
         <p>ข้อมูลโดยละเอียดของระบบ</p>
     </div>
     
-    <div class="nav">
-        <a href="/">หน้าแรก</a>
-        <a href="/network">ตั้งค่าเครือข่าย</a>
-        <a href="/system">ตั้งค่าระบบ</a>
-        <a href="/blink">Blink Integration</a>
-        <a href="/status" class="active">สถานะระบบ</a>
-    </div>
+         <div class="nav">
+         <a href="/">หน้าแรก</a>
+         <a href="/network">ตั้งค่าเครือข่าย</a>
+         <a href="/system">ตั้งค่าระบบ</a>
+         <a href="/blink">Blink Integration</a>
+         <a href="/status" class="active">สถานะระบบ</a>
+         <a href="/device-test">ทดสอบอุปกรณ์</a>
+     </div>
     
     <div class="content">
         <div class="card">

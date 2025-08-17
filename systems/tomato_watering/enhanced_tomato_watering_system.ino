@@ -29,6 +29,7 @@
 // Include enhanced system base
 #include "../common/base_code/enhanced_system_base.h"
 #include "../common/base_code/web_handlers.cpp"
+#include "../common/base_code/device_test_handlers.cpp"
 
 // System-specific pin definitions
 #define PUMP_RELAY_PIN 18

@@ -301,6 +301,10 @@ void handleFactoryReset();
 void handleOTAUpdate();
 void handleNotFound();
 
+// Device Test Handler Functions
+void setupDeviceTestHandlers();
+void handleDeviceTest();
+
 // API Handler Functions
 void handleAPIStatus();
 void handleAPIConfig();
