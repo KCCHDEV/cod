@@ -32,6 +32,8 @@
 #include <HTTPClient.h>
 #include <ArduinoOTA.h>
 #include <WiFiClientSecure.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
 
 // System Configuration
 #define FIRMWARE_VERSION "4.0"
@@ -65,6 +67,11 @@ const char* lineToken = "YOUR_LINE_NOTIFY_TOKEN";
 #define RESET_BUTTON_PIN 0
 #define MANUAL_FEED_BUTTON_PIN 4
 
+// LCD Configuration
+#define LCD_ADDRESS 0x27
+#define LCD_COLUMNS 16
+#define LCD_ROWS 2
+
 // Feeding Configuration
 #define DEFAULT_PORTION_SIZE 30  // grams
 #define MIN_PORTION_SIZE 5
@@ -79,6 +86,7 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200, 60000); // UTC+7 Thailand
 HX711 scale;
 Servo feedingServo;
+LiquidCrystal_I2C lcd(LCD_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 
 // System Variables
 bool isWiFiConnected = false;
@@ -153,6 +161,9 @@ void saveSettings();
 void loadSettings();
 void performSystemMaintenance();
 void calibrateScale();
+void updateLCDDisplay();
+void displayBootMessage();
+void displaySystemStatus();
 
 void setup() {
   Serial.begin(115200);
@@ -245,6 +256,12 @@ void setupSystem() {
   pinMode(STATUS_LED_PIN, OUTPUT);
   pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
   pinMode(MANUAL_FEED_BUTTON_PIN, INPUT_PULLUP);
+  
+  // Initialize LCD
+  Wire.begin();
+  lcd.init();
+  lcd.backlight();
+  displayBootMessage();
   
   // Initialize servo
   feedingServo.attach(SERVO_PIN);
