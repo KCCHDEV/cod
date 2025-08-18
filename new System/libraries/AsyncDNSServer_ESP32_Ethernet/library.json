@@ -1,0 +1,100 @@
+{
+  "name":"AsyncDNSServer_ESP32_Ethernet",
+  "version": "1.2.0",
+  "description":"Fully Asynchronous DNS Server Library for ESP32 boards using LwIP W5500, W6100 or ENC28J60 Ethernet. This library is one of the current or future and more advanced Async libraries, such as AsyncWebServer_ESP32_Ethernet, AsyncHTTPRequest_ESP32_Ethernet, AsyncHTTPSRequest_ESP32_Ethernet",
+  "keywords":"communication, data, async, udp, ntp, time, time-server, server, client, multicast, broadcast, webserver, esp32, esp32-s2, esp32-c3, w5500, w6100, enc28j60, lwip, lwip-w5500, lwip-w6100, lwip-enc28j60, udp-server, udp-multicast-server",
+  "authors": 
+  [
+    {
+      "name": "Develo",
+      "url":   "https://github.com/devyte"
+    },
+    {
+      "name":  "Khoi Hoang",
+      "url":   "https://github.com/khoih-prog",
+      "email": "khoih.prog@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/khoih-prog/AsyncDNSServer_ESP32_Ethernet"
+  },
+  "homepage": "https://github.com/khoih-prog/AsyncDNSServer_ESP32_Ethernet",
+  "export": {
+    "exclude": [
+      "linux",
+      "extras",
+      "tests"
+    ]
+  },
+  "dependencies": 
+  [
+    {
+      "owner": "khoih-prog",
+      "name": "WebServer_ESP32_W5500",
+      "version": "^1.5.2",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "WebServer_ESP32_W6100",
+      "version": "^1.5.2",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "WebServer_ESP32_ENC",
+      "version": "^1.5.1",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "WebServer_ESP32_SC_W5500",
+      "version": "^1.2.1",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "WebServer_ESP32_SC_W6100",
+      "version": "^1.2.1",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "WebServer_ESP32_SC_ENC",
+      "version": "^1.2.0",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "AsyncUDP_ESP32_W5500",
+      "version": "^2.0.0",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "AsyncUDP_ESP32_W6100",
+      "version": "^2.0.0",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "AsyncUdp_ESP32_ENC",
+      "version": "^2.0.0",
+      "platforms": "espressif32"
+    },
+    {
+      "owner": "khoih-prog",
+      "name": "AsyncUDP_ESP32_SC_Ethernet",
+      "version": "^2.2.0",
+      "platforms": "espressif32"
+    }
+  ],
+  "license": "LGPL-3.0",
+  "frameworks": "*",
+  "platforms": ["espressif32"],
+  "examples": "examples/*/*/*.ino",
+  "headers": [ "AsyncDNSServer_ESP32_Ethernet.h", "AsyncDNSServer_ESP32_Ethernet.hpp" ]
+}  
