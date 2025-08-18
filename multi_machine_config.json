@@ -1,0 +1,100 @@
+{
+  "system_info": {
+    "version": "4.0",
+    "firmware_maker": "RDTRC",
+    "updated": "2024",
+    "description": "Multi-Machine IoT System Configuration"
+  },
+  "machines": {
+    "machine_01_cat_feeding": {
+      "id": "CAT_FEED_001",
+      "name": "Cat Feeding Station #1",
+      "type": "cat_feeding",
+      "location": "Kitchen",
+      "ip_range": "192.168.1.100-110",
+      "mqtt_topic": "rdtrc/cat_feeding/machine01",
+      "features": {
+        "feeding_times": 6,
+        "portion_range": [5, 100],
+        "sensors": ["load_cell", "pir", "ultrasonic"],
+        "actuators": ["servo", "buzzer", "led"],
+        "connectivity": ["wifi", "blink", "hotspot"]
+      }
+    },
+    "machine_02_bird_feeding": {
+      "id": "BIRD_FEED_001", 
+      "name": "Bird Feeding Station #1",
+      "type": "bird_feeding",
+      "location": "Garden",
+      "ip_range": "192.168.1.111-120",
+      "mqtt_topic": "rdtrc/bird_feeding/machine02",
+      "features": {
+        "feeding_times": 4,
+        "portion_range": [10, 50],
+        "sensors": ["weight", "motion", "light"],
+        "actuators": ["servo", "buzzer", "led"],
+        "connectivity": ["wifi", "blink", "hotspot"]
+      }
+    },
+    "machine_03_tomato_watering": {
+      "id": "TOMATO_WATER_001",
+      "name": "Tomato Watering System #1", 
+      "type": "tomato_watering",
+      "location": "Greenhouse_A",
+      "ip_range": "192.168.1.121-130",
+      "mqtt_topic": "rdtrc/watering/tomato/machine03",
+      "features": {
+        "watering_zones": 4,
+        "sensors": ["soil_moisture", "temperature", "humidity", "light"],
+        "actuators": ["water_pump", "solenoid_valves", "fan"],
+        "connectivity": ["wifi", "blink", "hotspot"]
+      }
+    },
+    "machine_04_mushroom_cilantro": {
+      "id": "MUSHROOM_CIL_001",
+      "name": "Mushroom & Cilantro System #1",
+      "type": "mushroom_cilantro",
+      "location": "Greenhouse_B", 
+      "ip_range": "192.168.1.131-140",
+      "mqtt_topic": "rdtrc/growing/mushroom_cilantro/machine04",
+      "features": {
+        "growing_zones": 2,
+        "sensors": ["soil_moisture", "temperature", "humidity", "co2", "ph"],
+        "actuators": ["water_pump", "misting_system", "heater", "fan", "led_grow_lights"],
+        "connectivity": ["wifi", "blink", "hotspot"]
+      }
+    },
+    "machine_05_coordinator": {
+      "id": "COORDINATOR_001",
+      "name": "Central Coordinator Hub",
+      "type": "coordinator",
+      "location": "Control_Room",
+      "ip_range": "192.168.1.10-20",
+      "mqtt_topic": "rdtrc/coordinator/hub",
+      "features": {
+        "dashboard": true,
+        "data_logging": true,
+        "alert_management": true,
+        "remote_control": true,
+        "scheduling": true,
+        "connectivity": ["wifi", "ethernet", "mqtt_broker"]
+      }
+    }
+  },
+  "network_config": {
+    "wifi_ssid": "RDTRC_IoT_Network",
+    "wifi_password": "RDTRC2024!",
+    "mqtt_broker": "192.168.1.10",
+    "mqtt_port": 1883,
+    "web_port": 80,
+    "hotspot_ssid_prefix": "RDTRC_",
+    "hotspot_password": "rdtrc123"
+  },
+  "communication_protocol": {
+    "primary": "MQTT",
+    "fallback": "HTTP_REST",
+    "heartbeat_interval": 30,
+    "data_sync_interval": 60,
+    "emergency_protocol": "DIRECT_HOTSPOT"
+  }
+}
