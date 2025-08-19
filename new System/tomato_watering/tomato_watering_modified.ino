@@ -109,7 +109,7 @@ const char* lineToken = "YOUR_LINE_NOTIFY_TOKEN";
 WebServer server(80);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200, 60000); // UTC+7 Thailand
-DHT dht(DHT_PIN, DHT_TYPE);
+// DHT dht(DHT_PIN, DHT_TYPE); // Removed - using soil moisture sensors only
 RDTRC_LCD systemLCD;
 
 // System Variables
