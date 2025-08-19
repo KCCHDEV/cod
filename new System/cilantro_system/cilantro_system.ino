@@ -361,9 +361,8 @@ void setupSystem() {
   // Setup LCD first
   setupLCD();
   
-  // Initialize DHT sensor
-  dht.begin();
-  systemLCD.showDebug("DHT22 Init", "Sensor Ready");
+  // Initialize soil moisture sensors
+  systemLCD.showDebug("Soil Sensors", "5 Sensors Ready");
   
   // Initialize SPIFFS
   if (!SPIFFS.begin(true)) {
@@ -425,8 +424,8 @@ void setupSystem() {
   startupMsg += "Version: " + String(FIRMWARE_VERSION) + "\n";
   startupMsg += String("LCD: ") + (systemLCD.isLCDConnected() ? "Connected" : "Not Found") + "\n";
   startupMsg += "Water Level: " + String(waterLevel) + "cm\n";
-  startupMsg += "Temperature: " + String(ambientTemperature) + "C\n";
-  startupMsg += "Humidity: " + String(ambientHumidity) + "%\n";
+  startupMsg += "Soil Moisture: " + String(averageSoilMoisture) + "%\n";
+  startupMsg += "Sensors Active: " + String(NUM_SOIL_SENSORS) + "\n";
   startupMsg += "Cilantro Phase: " + cilantro.growthPhase + "\n";
   startupMsg += "Status: Growing environment ready!";
   sendLineNotification(startupMsg);
@@ -900,17 +899,29 @@ void controlLighting() {
 }
 
 void readSensors() {
-  // Read DHT sensor
-  ambientTemperature = dht.readTemperature();
-  ambientHumidity = dht.readHumidity();
+  // Read all soil moisture sensors
+  float totalMoisture = 0;
+  minSoilMoisture = 100;
+  maxSoilMoisture = 0;
   
-  // Check for sensor errors
-  if (isnan(ambientTemperature) || isnan(ambientHumidity)) {
-    Serial.println("DHT sensor error");
-    systemLCD.showDebug("DHT Error", "Check Sensor");
-    ambientTemperature = 0;
-    ambientHumidity = 0;
+  for (int i = 0; i < NUM_SOIL_SENSORS; i++) {
+    int rawValue = analogRead(soilSensorPins[i]);
+    soilMoisture[i] = map(rawValue, 0, 4095, 100, 0); // Invert: higher ADC = drier soil
+    soilMoisture[i] = constrain(soilMoisture[i], 0, 100);
+    
+    totalMoisture += soilMoisture[i];
+    if (soilMoisture[i] < minSoilMoisture) minSoilMoisture = soilMoisture[i];
+    if (soilMoisture[i] > maxSoilMoisture) maxSoilMoisture = soilMoisture[i];
   }
+  
+  // Calculate average soil moisture
+  averageSoilMoisture = totalMoisture / NUM_SOIL_SENSORS;
+  
+  Serial.println("Soil Moisture Sensors: [" + String(soilMoisture[0]) + ", " + 
+                String(soilMoisture[1]) + ", " + String(soilMoisture[2]) + ", " + 
+                String(soilMoisture[3]) + ", " + String(soilMoisture[4]) + "]");
+  Serial.println("Average: " + String(averageSoilMoisture) + "%, Min: " + 
+                String(minSoilMoisture) + "%, Max: " + String(maxSoilMoisture) + "%");
   
   // Read CO2 sensor (analog approximation)
   int co2Raw = analogRead(CO2_SENSOR_PIN);
@@ -944,9 +955,8 @@ void readSensors() {
   if (cilantro.currentMoisture < 0) cilantro.currentMoisture = 0;
   if (cilantro.currentMoisture > 100) cilantro.currentMoisture = 100;
   
-  // Update zone temperature and humidity (assuming ambient for now)
-  cilantro.currentTemp = ambientTemperature;
-  cilantro.currentHumidity = ambientHumidity;
+  // Update cilantro zone with primary soil sensor data (sensor 0)
+  cilantro.currentMoisture = (int)soilMoisture[0];
   
   // Update Blynk with sensor data
   if (isWiFiConnected) {
