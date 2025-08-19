@@ -9,7 +9,7 @@
  * - LCD I2C 16x2 display with auto address detection
  * - Advanced environmental control
  * - Soil moisture monitoring
- * - Advanced soil moisture monitoring with multiple sensors
+ * - Temperature, humidity, CO2, and pH monitoring
  * - LED grow lights with timer control
  * - Automated watering system
  * - Ventilation fan control
@@ -38,7 +38,7 @@
 #include <WiFiUdp.h>
 #include <HTTPClient.h>
 #include <ArduinoOTA.h>
-// #include <DHT.h> // Removed - using soil moisture sensors only
+#include <DHT.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include "RDTRC_LCD_Library.h"
@@ -59,17 +59,14 @@ const char* hotspot_password = "rdtrc123";
 const char* lineToken = "YOUR_LINE_NOTIFY_TOKEN";
 
 // Pin Definitions
-// DHT22 removed - using soil moisture sensors only
+#define DHT_PIN 22
+#define DHT_TYPE DHT22
 #define CO2_SENSOR_PIN 23
 #define PH_SENSOR_PIN 32
 #define LIGHT_SENSOR_PIN 33
 
-// Cilantro Zone Pins - Enhanced Soil Moisture Monitoring
-#define CILANTRO_SOIL_PIN_1 35     // Primary soil sensor
-#define CILANTRO_SOIL_PIN_2 34     // Secondary soil sensor
-#define CILANTRO_SOIL_PIN_3 36     // Tertiary soil sensor  
-#define CILANTRO_SOIL_PIN_4 39     // Additional soil sensor
-#define CILANTRO_SOIL_PIN_5 22     // Reusing DHT22 pin for soil sensor
+// Cilantro Zone Pins
+#define CILANTRO_SOIL_PIN 35
 #define CILANTRO_WATER_PUMP_PIN 5
 #define CILANTRO_GROW_LIGHT_PIN 17
 #define CILANTRO_FAN_PIN 16
@@ -89,12 +86,10 @@ const char* lineToken = "YOUR_LINE_NOTIFY_TOKEN";
 #define I2C_SDA 21
 #define I2C_SCL 22
 
-// Growing Configuration - Soil Moisture Focused
-#define CILANTRO_OPTIMAL_MOISTURE_MIN 40     // % - Minimum optimal soil moisture
-#define CILANTRO_OPTIMAL_MOISTURE_MAX 75     // % - Maximum optimal soil moisture
-#define CILANTRO_DRY_THRESHOLD 25           // % - Dry soil threshold
-#define CILANTRO_WET_THRESHOLD 85           // % - Wet soil threshold
-#define NUM_SOIL_SENSORS 5                  // Number of soil moisture sensors
+// Growing Configuration
+#define CILANTRO_OPTIMAL_TEMP 20.0       // °C
+#define CILANTRO_OPTIMAL_HUMIDITY 60.0   // %
+#define CILANTRO_OPTIMAL_MOISTURE 50     // %
 
 #define WATER_TANK_HEIGHT 40             // cm
 #define LOW_WATER_THRESHOLD 8            // cm
@@ -106,7 +101,7 @@ const char* lineToken = "YOUR_LINE_NOTIFY_TOKEN";
 WebServer server(80);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200, 60000); // UTC+7 Thailand
-// DHT dht(DHT_PIN, DHT_TYPE); // Removed - using soil moisture sensors only
+DHT dht(DHT_PIN, DHT_TYPE);
 RDTRC_LCD systemLCD;
 
 // System Variables
@@ -145,22 +140,13 @@ GrowingZone cilantro = {
   0, 0, 0, false, false, false, 0, 0, "Germination", 0, true
 };
 
-// Environmental Variables - Soil Moisture Focused
-// Temperature and humidity variables removed - using soil moisture only
+// Environmental Variables
+float ambientTemperature = 0;
+float ambientHumidity = 0;
 int co2Level = 0;
 float phLevel = 7.0;
 int lightLevel = 0;
 float waterLevel = 0;
-
-// Soil Moisture Variables
-float soilMoisture[NUM_SOIL_SENSORS] = {0, 0, 0, 0, 0};  // 5 soil moisture sensors
-float averageSoilMoisture = 0;                           // Average across all sensors
-float minSoilMoisture = 100;                             // Minimum soil moisture
-float maxSoilMoisture = 0;                               // Maximum soil moisture
-int soilSensorPins[NUM_SOIL_SENSORS] = {
-  CILANTRO_SOIL_PIN_1, CILANTRO_SOIL_PIN_2, CILANTRO_SOIL_PIN_3, 
-  CILANTRO_SOIL_PIN_4, CILANTRO_SOIL_PIN_5
-};
 bool isDaylight = true;
 bool systemMaintenanceMode = false;
 
