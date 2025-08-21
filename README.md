@@ -1,116 +1,196 @@
 # 🤖 RDTRC IoT Systems Collection
-## ชุดระบบ IoT ครบครัน - เวอร์ชัน 2.0
+## ชุดระบบ IoT ครบครัน - เวอร์ชัน 3.0
 
 > **Firmware made by: RDTRC**  
-> **Version: 2.0 - Organized Structure**  
+> **Version: 3.0 - Advanced Sensor Suite with Offline Detection**  
 > **Updated: 2024**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Arduino](https://img.shields.io/badge/Arduino-Compatible-blue.svg)](https://www.arduino.cc/)
 [![ESP32](https://img.shields.io/badge/ESP32-Supported-green.svg)](https://www.espressif.com/)
 [![Firmware](https://img.shields.io/badge/Firmware-RDTRC-red.svg)](https://github.com)
+[![Sensors](https://img.shields.io/badge/Sensors-Advanced-orange.svg)](https://github.com)
 
 ---
 
-## 🎉 **อัพเดทใหม่! โครงสร้างระบบถูกจัดระเบียบใหม่**
+## 🎉 **อัพเดทใหม่! ระบบ Sensor ครบครัน + Offline Detection**
 
-### ✨ สิ่งที่เปลี่ยนแปลง
-- 📁 **โครงสร้างแบบ Modular** - แยกระบบเป็น folder เดียวกัน
-- 🖥️ **Boot Screen มาตรฐาน** - แสดง "FW make by RDTRC" ทุกระบบ
-- 🔧 **SystemBase Class** - คลาสพื้นฐานร่วมกัน
-- 📱 **Web Interface ปรับปรุง** - หน้าตาและฟีเจอร์ดีขึ้น
+### ✨ สิ่งที่เปลี่ยนแปลงในเวอร์ชัน 3.0
+- 🌡️ **Sensor Suite ครบครัน** - ทุกระบบมี sensor ที่เกี่ยวข้องครบถ้วน
+- 🔍 **Offline Detection** - ตรวจสอบ sensor ที่ไม่ทำงานและข้ามไป
+- 📺 **LCD Skip Logic** - ถ้า LCD ไม่เชื่อมต่อจะข้ามการใช้งาน
+- 🛡️ **Graceful Degradation** - ระบบยังทำงานได้แม้ sensor บางตัวเสีย
+- 🎯 **Multi-Zone Control** - ควบคุมหลายโซนพร้อมกัน
+- 📊 **Real-time Monitoring** - ตรวจสอบข้อมูลแบบเรียลไทม์
 
 ---
 
 ## 🎛️ ระบบที่มีให้เลือก
 
-### 1. 🐱 ระบบให้อาหารแมวอัตโนมัติ
-**📂 Path:** [`systems/cat_feeding/`](systems/cat_feeding/)
+### 1. 🌸 ระบบรดน้ำกล้วยไม้อัตโนมัติ (NEW!)
+**📂 Path:** [`new System/orchid_watering_system/`](new System/orchid_watering_system/)
 
-**🔧 Main Code:** [`cat_feeding_system.ino`](systems/cat_feeding/code/cat_feeding_system.ino)
+**🔧 Main Code:** [`orchid_watering_system.ino`](new System/orchid_watering_system/orchid_watering_system.ino)
 
 **✨ Features:**
-- ✅ ให้อาหารตามเวลา (6 เวลา/วัน)
-- ✅ วัดน้ำหนักอาหาร (Load Cell)
+- ✅ รดน้ำ 6 โซนแยกกัน (Capacitive Soil Moisture)
+- ✅ วัดอุณหภูมิ/ความชื้น (DHT22)
+- ✅ วัดแสง (LDR)
+- ✅ วัด pH และ EC ของดิน
+- ✅ วัดคุณภาพอากาศ (CO2, Air Quality)
+- ✅ ตรวจระดับน้ำและ Flow Rate
+- ✅ **Offline Detection** - ข้าม sensor ที่เสีย
+- ✅ **LCD Skip** - ถ้า LCD ไม่เชื่อมต่อ
+- ✅ **Graceful Degradation** - ทำงานต่อได้แม้ sensor เสีย
+
+**📖 Documentation:**
+- [📋 คู่มือการใช้งาน](new System/orchid_watering_system/README_orchid_system.md)
+- [⚙️ คู่มือการติดตั้ง](new System/orchid_watering_system/ORCHID_SETUP_GUIDE_TH.md)
+- [📊 สรุประบบ](new System/orchid_watering_system/ORCHID_SUMMARY_TH.md)
+
+---
+
+### 2. 🍅 ระบบรดน้ำมะเขือเทศอัตโนมัติ (Enhanced!)
+**📂 Path:** [`new System/tomato_watering/`](new System/tomato_watering/)
+
+**🔧 Main Code:** [`tomato_watering.ino`](new System/tomato_watering/tomato_watering.ino)
+
+**✨ Features:**
+- ✅ รดน้ำ 4 โซนแยกกัน (Soil Moisture x6)
+- ✅ วัดอุณหภูมิ/ความชื้น (DHT22)
+- ✅ วัดแสง (LDR)
+- ✅ วัด pH และ EC ของดิน
+- ✅ วัดคุณภาพอากาศ (CO2, Air Quality)
+- ✅ ตรวจระดับน้ำและ Flow Rate
+- ✅ **Offline Detection** - ข้าม sensor ที่เสีย
+- ✅ **LCD Skip** - ถ้า LCD ไม่เชื่อมต่อ
+- ✅ **Graceful Degradation** - ทำงานต่อได้แม้ sensor เสีย
+
+**📖 Documentation:**
+- [📋 คู่มือการใช้งาน](new System/tomato_watering/README_tomato_system.md)
+
+---
+
+### 3. 🐱 ระบบให้อาหารแมวอัตโนมัติ (Enhanced!)
+**📂 Path:** [`new System/cat_feeding_system/`](new System/cat_feeding_system/)
+
+**🔧 Main Code:** [`cat_feeding_system.ino`](new System/cat_feeding_system/cat_feeding_system.ino)
+
+**✨ Features:**
+- ✅ วัดน้ำหนักอาหาร (Load Cell HX711)
 - ✅ ตรวจจับแมว (PIR Sensor)
-- ✅ ควบคุมปริมาณ 5-100g
-- ✅ แจ้งเตือนอาหารหมด
-- ✅ **Boot Screen: "FW make by RDTRC"**
+- ✅ ตรวจระยะห่าง (Ultrasonic HC-SR04)
+- ✅ วัดอุณหภูมิ/ความชื้น (DHT22)
+- ✅ วัดแสง (LDR)
+- ✅ วัด pH และ EC ของน้ำ
+- ✅ วัดคุณภาพอากาศ (CO2, Air Quality)
+- ✅ ตรวจระดับน้ำและ Flow Rate
+- ✅ **Offline Detection** - ข้าม sensor ที่เสีย
+- ✅ **LCD Skip** - ถ้า LCD ไม่เชื่อมต่อ
+- ✅ **Graceful Degradation** - ทำงานต่อได้แม้ sensor เสีย
 
 **📖 Documentation:**
-- [📋 คู่มือการใช้งาน](systems/cat_feeding/docs/CAT_FEEDING_README_TH.md)
-- [⚙️ คู่มือการติดตั้ง](systems/cat_feeding/docs/CAT_FEEDING_SETUP_GUIDE_TH.md)
-- [🔌 แผนผังการเชื่อมต่อ](systems/cat_feeding/wiring/wiring_diagram_cat_feeding.txt)
-- [📦 รายการไลบรารี](systems/cat_feeding/libraries/libraries_cat_feeding.txt)
+- [📋 คู่มือการใช้งาน](new System/cat_feeding_system/CAT_FEEDING_README_TH.md)
+- [⚙️ คู่มือการติดตั้ง](new System/cat_feeding_system/CAT_FEEDING_SETUP_GUIDE_TH.md)
 
 ---
 
-### 2. 🐦 ระบบให้อาหารนกอัตโนมัติ
-**📂 Path:** [`systems/bird_feeding/`](systems/bird_feeding/)
+### 4. 🐦 ระบบให้อาหารนกอัตโนมัติ (Enhanced!)
+**📂 Path:** [`new System/BirdFeedingSystem/`](new System/BirdFeedingSystem/)
 
-**🔧 Main Code:** [`bird_feeding_system.ino`](systems/bird_feeding/code/bird_feeding_system.ino)
+**🔧 Main Code:** [`BirdFeedingSystem.ino`](new System/BirdFeedingSystem/BirdFeedingSystem.ino)
 
 **✨ Features:**
-- ✅ ให้อาหารและน้ำแยกกัน
-- ✅ ตรวจระดับอาหาร (Ultrasonic)
-- ✅ ตรวจระดับน้ำ (ADC)
+- ✅ วัดน้ำหนักอาหาร (Load Cell HX711)
 - ✅ ตรวจจับนก (PIR Sensor)
-- ✅ ปั๊มน้ำอัตโนมัติ
-- ✅ **Boot Screen: "FW make by RDTRC"**
+- ✅ วัดอุณหภูมิ/ความชื้น (DHT22)
+- ✅ วัดแสง (LDR)
+- ✅ วัด pH และ EC ของน้ำ
+- ✅ วัดคุณภาพอากาศ (CO2, Air Quality)
+- ✅ ตรวจระดับน้ำและ Flow Rate
+- ✅ **Offline Detection** - ข้าม sensor ที่เสีย
+- ✅ **LCD Skip** - ถ้า LCD ไม่เชื่อมต่อ
+- ✅ **Graceful Degradation** - ทำงานต่อได้แม้ sensor เสีย
 
 **📖 Documentation:**
-- [📋 คู่มือการใช้งาน](systems/bird_feeding/docs/README_bird_feeding.md)
-- [🔌 แผนผังการเชื่อมต่อ](systems/bird_feeding/wiring/wiring_diagram_bird_feeding.txt)
-- [📦 รายการไลบรารี](systems/bird_feeding/libraries/libraries_bird_feeding.txt)
-
-**🧪 Test Files:**
-- [⚡ Quick Test](systems/bird_feeding/code/bird_feeding_quick_test.ino)
-- [🔬 Full Test](systems/bird_feeding/code/bird_feeding_test.ino)
+- [📋 คู่มือการใช้งาน](new System/BirdFeedingSystem/README_bird_feeding.md)
 
 ---
 
-### 3. 🍅 ระบบรดน้ำมะเขือเทศอัตโนมัติ
-**📂 Path:** [`systems/tomato_watering/`](systems/tomato_watering/)
+### 5. 🌿 ระบบปลูกผักชีอัตโนมัติ (Enhanced!)
+**📂 Path:** [`new System/cilantro_system/`](new System/cilantro_system/)
 
-**🔧 Main Code:** [`tomato_watering_system.ino`](systems/tomato_watering/code/tomato_watering_system.ino)
+**🔧 Main Code:** [`cilantro_system.ino`](new System/cilantro_system/cilantro_system.ino)
 
 **✨ Features:**
-- ✅ รดน้ำตามเวลาและความชื้นดิน
-- ✅ ตรวจความชื้นดิน (Soil Moisture)
-- ✅ ตรวจระดับน้ำในถัง
-- ✅ วัดอุณหภูมิ/ความชื้นอากาศ (DHT22)
-- ✅ ปั๊มน้ำและวาล์วควบคุม
-- ✅ **Boot Screen: "FW make by RDTRC"**
-
-**📖 Documentation:**
-- [📋 คู่มือการใช้งาน](systems/tomato_watering/docs/README_tomato_system.md)
-- [🔌 แผนผังการเชื่อมต่อ](systems/tomato_watering/wiring/wiring_diagram_tomato.txt)
-- [📦 รายการไลบรารี](systems/tomato_watering/libraries/libraries_tomato.txt)
-
-**🌿 Variant Systems:**
-- [🌿 Cilantro Watering](systems/tomato_watering/code/cilantro_watering_system.ino)
-- [🌹 Rose Watering](systems/tomato_watering/code/rose_watering_system.ino)
-- [🍄 Mushroom System](systems/tomato_watering/code/mushroom_system.ino)
+- ✅ รดน้ำ 5 โซนแยกกัน (Soil Moisture x5)
+- ✅ วัดอุณหภูมิ/ความชื้น (DHT22)
+- ✅ วัดแสง (LDR)
+- ✅ วัด pH และ EC ของดิน
+- ✅ วัดคุณภาพอากาศ (CO2, Air Quality)
+- ✅ ตรวจระดับน้ำและ Flow Rate
+- ✅ **Offline Detection** - ข้าม sensor ที่เสีย
+- ✅ **LCD Skip** - ถ้า LCD ไม่เชื่อมต่อ
+- ✅ **Graceful Degradation** - ทำงานต่อได้แม้ sensor เสีย
 
 ---
 
-## 🔧 ระบบพื้นฐานร่วม (Common Base System)
+### 6. 🍄 ระบบปลูกเห็ดอัตโนมัติ (Enhanced!)
+**📂 Path:** [`new System/standalone_projects_mushroom/`](new System/standalone_projects_mushroom/)
 
-### 📂 Path: [`systems/common/`](systems/common/)
-
-**🔧 Core Files:**
-- [`system_base.h`](systems/common/base_code/system_base.h) - Header file หลัก
-- [`system_base.cpp`](systems/common/base_code/system_base.cpp) - Implementation
+**🔧 Main Code:** [`standalone_projects_mushroom.ino`](new System/standalone_projects_mushroom/standalone_projects_mushroom.ino)
 
 **✨ Features:**
-- 🖥️ **Boot Screen**: แสดง "FW make by RDTRC" Version 2.0
-- 🌐 **WiFi Management**: การเชื่อมต่อและ reconnect อัตโนมัติ
-- 📱 **Web Server**: หน้าเว็บมาตรฐานสำหรับทุกระบบ
-- 🔧 **API Endpoints**: REST API ครบครัน
-- 📊 **Status Management**: จัดการสถานะระบบ
-- 💾 **EEPROM Storage**: บันทึกการตั้งค่า
-- 🚨 **Error Handling**: จัดการข้อผิดพลาดแบบมาตรฐาน
-- 🎵 **Sound & LED**: เสียงและไฟแสดงสถานะ
+- ✅ รดน้ำ 1 โซน (Soil Moisture)
+- ✅ วัดอุณหภูมิ/ความชื้น (DHT22)
+- ✅ วัดแสง (LDR)
+- ✅ วัด pH และ EC ของดิน
+- ✅ วัดคุณภาพอากาศ (CO2, Air Quality)
+- ✅ ตรวจระดับน้ำและ Flow Rate
+- ✅ **Offline Detection** - ข้าม sensor ที่เสีย
+- ✅ **LCD Skip** - ถ้า LCD ไม่เชื่อมต่อ
+- ✅ **Graceful Degradation** - ทำงานต่อได้แม้ sensor เสีย
+
+---
+
+## 🔧 ระบบ Sensor และ Offline Detection
+
+### 📊 Sensor Suite ที่ใช้ในทุกระบบ
+
+| Sensor | หน้าที่ | ระบบที่ใช้ | Offline Detection |
+|--------|--------|------------|-------------------|
+| **DHT22** | อุณหภูมิ/ความชื้น | ทุกระบบ | ✅ |
+| **LDR** | วัดแสง | ทุกระบบ | ✅ |
+| **pH Sensor** | วัดความเป็นกรด-ด่าง | ทุกระบบ | ✅ |
+| **EC Sensor** | วัดค่าการนำไฟฟ้า | ทุกระบบ | ✅ |
+| **CO2 Sensor** | วัดคาร์บอนไดออกไซด์ | ทุกระบบ | ✅ |
+| **Air Quality** | วัดคุณภาพอากาศ | ทุกระบบ | ✅ |
+| **Water Level** | ตรวจระดับน้ำ | ทุกระบบ | ✅ |
+| **Flow Sensor** | วัดอัตราการไหล | ทุกระบบ | ✅ |
+| **Soil Moisture** | วัดความชื้นดิน | ระบบรดน้ำ | ✅ |
+| **Load Cell** | วัดน้ำหนัก | ระบบให้อาหาร | ✅ |
+| **PIR** | ตรวจจับการเคลื่อนไหว | ระบบให้อาหาร | ✅ |
+| **Ultrasonic** | วัดระยะห่าง | ระบบให้อาหาร | ✅ |
+| **LCD I2C** | แสดงผล | ทุกระบบ | ✅ Skip |
+
+### 🛡️ Offline Detection System
+
+```cpp
+struct SensorStatus {
+  bool isOnline;
+  unsigned long lastReading;
+  float lastValue;
+  int errorCount;
+  String sensorName;
+};
+```
+
+**✨ Features:**
+- 🔍 **Timeout Detection** - 30 วินาที
+- 🔄 **Retry Mechanism** - ทดลองใหม่ทุก 1 นาที
+- ❌ **Error Counting** - 3 ครั้งแล้วข้าม
+- 🛡️ **Graceful Degradation** - ทำงานต่อได้
+- 📺 **LCD Skip** - ข้ามถ้าไม่เชื่อมต่อ
 
 ---
 
@@ -119,22 +199,34 @@
 ### 1. 📥 ดาวน์โหลดและเตรียม
 ```bash
 git clone [repository-url]
-cd RDTRC-IoT-Systems
+cd cod
 ```
 
 ### 2. 🛠️ เลือกระบบที่ต้องการ
 ```bash
-# ระบบให้อาหารแมว
-cd systems/cat_feeding/code/
-open cat_feeding_system.ino
-
-# ระบบให้อาหารนก  
-cd systems/bird_feeding/code/
-open bird_feeding_system.ino
+# ระบบรดน้ำกล้วยไม้ (ใหม่!)
+cd "new System/orchid_watering_system/"
+open orchid_watering_system.ino
 
 # ระบบรดน้ำมะเขือเทศ
-cd systems/tomato_watering/code/
-open tomato_watering_system.ino
+cd "new System/tomato_watering/"
+open tomato_watering.ino
+
+# ระบบให้อาหารแมว
+cd "new System/cat_feeding_system/"
+open cat_feeding_system.ino
+
+# ระบบให้อาหารนก
+cd "new System/BirdFeedingSystem/"
+open BirdFeedingSystem.ino
+
+# ระบบปลูกผักชี
+cd "new System/cilantro_system/"
+open cilantro_system.ino
+
+# ระบบปลูกเห็ด
+cd "new System/standalone_projects_mushroom/"
+open standalone_projects_mushroom.ino
 ```
 
 ### 3. ⚙️ แก้ไขการตั้งค่า
@@ -151,14 +243,17 @@ Arduino IDE → Tools → Manage Libraries
 
 ไลบรารีพื้นฐาน:
 - ArduinoJson
-- RTClib  
-- LiquidCrystal I2C
-- BlynkSimpleEsp32
+- NTPClient
+- HX711
+- ESP32Servo
+- Wire
+- LiquidCrystal_I2C
+- DHT sensor library
 
 ไลบรารีเฉพาะระบบ:
-- Cat: ESP32Servo, HX711
-- Bird: ESP32Servo
-- Tomato: DHT sensor library
+- RDTRC_Common_Library.h
+- RDTRC_LCD_Library.h
+- RDTRC_Orchid_Library.h (สำหรับระบบกล้วยไม้)
 ```
 
 ### 5. 📤 อัพโหลดและทดสอบ
@@ -173,60 +268,29 @@ Upload Speed: 921600
 
 ---
 
-## 🎨 Boot Screen Preview
+## 📊 สรุปการปรับปรุงเวอร์ชัน 3.0
 
-เมื่อระบบเริ่มต้น จะเห็น:
-
-```
-╔════════════════╗
-║ FW make by RDTRC║
-║ Version 2.0     ║
-╚════════════════╝
-        ↓
-╔════════════════╗
-║ [System Name]  ║
-║ Initializing...║
-╚════════════════╝
-        ↓
-╔════════════════╗
-║ [System Name]  ║
-║ ................║
-╚════════════════╝
-        ↓
-╔════════════════╗
-║ [System Name]  ║
-║ Ready - v2.0   ║
-╚════════════════╝
-```
-
-พร้อมเสียงประกอบ: 🎵 Boot melody
-
----
-
-## 📊 สรุปการปรับปรุง
-
-| ด้าน | ก่อนปรับปรุง | หลังปรับปรุง |
+| ด้าน | เวอร์ชัน 2.0 | เวอร์ชัน 3.0 |
 |------|---------------|---------------|
-| **โครงสร้าง** | ❌ ไฟล์กระจัด | ✅ จัดระเบียบเป็น folder |
-| **Boot Screen** | ❌ ไม่มี | ✅ "FW make by RDTRC" |
-| **Code Reuse** | ❌ เขียนซ้ำ | ✅ SystemBase Class |
-| **Documentation** | ⚠️ กระจัด | ✅ จัดเป็นหมวดหมู่ |
-| **API Structure** | ⚠️ ไม่เหมือนกัน | ✅ มาตรฐานเดียวกัน |
-| **Error Handling** | ⚠️ พื้นฐาน | ✅ ครบครันทุกระบบ |
-| **User Experience** | ⚠️ แตกต่างกัน | ✅ สอดคล้องกันทุกระบบ |
+| **จำนวนระบบ** | 3 ระบบ | 6 ระบบ |
+| **Sensor Suite** | ⚠️ พื้นฐาน | ✅ ครบครัน |
+| **Offline Detection** | ❌ ไม่มี | ✅ ครบครัน |
+| **LCD Skip Logic** | ❌ ไม่มี | ✅ ครบครัน |
+| **Graceful Degradation** | ❌ ไม่มี | ✅ ครบครัน |
+| **Multi-Zone Control** | ⚠️ จำกัด | ✅ ครบครัน |
+| **Real-time Monitoring** | ⚠️ พื้นฐาน | ✅ ครบครัน |
+| **Error Handling** | ⚠️ พื้นฐาน | ✅ ครบครัน |
 
 ---
 
 ## 📚 เอกสารเพิ่มเติม
 
 ### 📖 คู่มือหลัก
-- [📁 **MASTER_README.md**](systems/common/docs/MASTER_README.md) - ภาพรวมทั้งหมด
-- [🔧 **SYSTEM_STRUCTURE_GUIDE.md**](systems/common/docs/SYSTEM_STRUCTURE_GUIDE.md) - คู่มือโครงสร้างใหม่
-
-### 📋 คู่มือการติดตั้ง
-- [📦 การติดตั้งไลบรารี](systems/common/docs/LIBRARIES_INSTALLATION_TH.md)
-- [🔌 แผนผังการเชื่อมต่อ](systems/common/docs/CONNECTION_DIAGRAMS_TH.md)
-- [⚙️ คู่มือการติดตั้งครบครัน](systems/common/docs/README_COMPLETE_SETUP_TH.md)
+- [📊 **RDTRC_Sensor_Offline_Detection_Summary.md**](new System/RDTRC_Sensor_Offline_Detection_Summary.md) - สรุประบบ Sensor และ Offline Detection
+- [📋 **BIRD_FEEDING_SYSTEM_COMPLETE.md**](docs/BIRD_FEEDING_SYSTEM_COMPLETE.md)
+- [📋 **CAT_FEEDING_SYSTEM_COMPLETE.md**](docs/CAT_FEEDING_SYSTEM_COMPLETE.md)
+- [📋 **CILANTRO_SYSTEM_COMPLETE.md**](docs/CILANTRO_SYSTEM_COMPLETE.md)
+- [📋 **TOMATO_WATERING_SYSTEM_COMPLETE.md**](docs/TOMATO_WATERING_SYSTEM_COMPLETE.md)
 
 ### 🔧 คู่มือขั้นสูง
 - [⭐ ฟีเจอร์ขั้นสูง](systems/common/docs/ENHANCED_FEATURES_TH.md)
@@ -237,23 +301,45 @@ Upload Speed: 921600
 
 ## 🎯 การเลือกระบบที่เหมาะสม
 
+### 🌸 สำหรับการปลูกกล้วยไม้
+➡️ **[ระบบรดน้ำกล้วยไม้](new System/orchid_watering_system/)**
+- รดน้ำ 6 โซนแยกกัน
+- วัด pH และ EC ของดิน
+- ควบคุมแสงและอุณหภูมิ
+- เหมาะสำหรับกล้วยไม้หลายชนิด
+
+### 🍅 สำหรับการปลูกมะเขือเทศ
+➡️ **[ระบบรดน้ำมะเขือเทศ](new System/tomato_watering/)**
+- รดน้ำ 4 โซนแยกกัน
+- วัดความชื้นดิน 6 จุด
+- ควบคุมสภาพแวดล้อม
+- เหมาะสำหรับการปลูกเชิงพาณิชย์
+
 ### 🐱 สำหรับการเลี้ยงแมว
-➡️ **[ระบบให้อาหารแมว](systems/cat_feeding/)**
+➡️ **[ระบบให้อาหารแมว](new System/cat_feeding_system/)**
 - วัดน้ำหนักอาหารแม่นยำ
 - ตรวจจับแมวอัตโนมัติ
 - ป้องกันการให้อาหารมากเกินไป
+- เหมาะสำหรับแมวหลายตัว
 
 ### 🐦 สำหรับการเลี้ยงนก
-➡️ **[ระบบให้อาหารนก](systems/bird_feeding/)**
-- ให้อาหารและน้ำแยกกัน
-- ตรวจระดับอาหาร/น้ำ
+➡️ **[ระบบให้อาหารนก](new System/BirdFeedingSystem/)**
+- วัดน้ำหนักอาหาร
+- ตรวจจับนก
+- ควบคุมปริมาณอาหาร
 - เหมาะสำหรับนกหลายตัว
 
-### 🍅 สำหรับการปลูกผัก
-➡️ **[ระบบรดน้ำมะเขือเทศ](systems/tomato_watering/)**
-- ตรวจความชื้นดินอัตโนมัติ
-- วัดสภาพอากาศ
-- ควบคุมปั๊มน้ำและวาล์ว
+### 🌿 สำหรับการปลูกผักชี
+➡️ **[ระบบปลูกผักชี](new System/cilantro_system/)**
+- รดน้ำ 5 โซนแยกกัน
+- ควบคุมสภาพแวดล้อม
+- เหมาะสำหรับการปลูกผักชี
+
+### 🍄 สำหรับการปลูกเห็ด
+➡️ **[ระบบปลูกเห็ด](new System/standalone_projects_mushroom/)**
+- ควบคุมความชื้น
+- ควบคุมอุณหภูมิ
+- เหมาะสำหรับการปลูกเห็ด
 
 ---
 
@@ -261,9 +347,12 @@ Upload Speed: 921600
 
 | ระบบ | อุปกรณ์หลัก | ราคาประมาณ | ความซับซ้อน |
 |------|-------------|-------------|-------------|
-| 🐱 **Cat Feeding** | ESP32 + Servo + Load Cell + PIR | **฿1,500-2,500** | ⭐⭐⭐ |
-| 🐦 **Bird Feeding** | ESP32 + Servo x2 + Ultrasonic + Pump | **฿1,800-2,800** | ⭐⭐⭐⭐ |
-| 🍅 **Tomato Watering** | ESP32 + Pump + Sensors + DHT22 | **฿2,000-3,000** | ⭐⭐⭐⭐⭐ |
+| 🌸 **Orchid Watering** | ESP32 + Sensors + 6 Valves | **฿3,500-5,000** | ⭐⭐⭐⭐⭐ |
+| 🍅 **Tomato Watering** | ESP32 + Sensors + 4 Valves | **฿3,000-4,500** | ⭐⭐⭐⭐⭐ |
+| 🐱 **Cat Feeding** | ESP32 + Load Cell + Sensors | **฿2,500-3,500** | ⭐⭐⭐⭐ |
+| 🐦 **Bird Feeding** | ESP32 + Load Cell + Sensors | **฿2,500-3,500** | ⭐⭐⭐⭐ |
+| 🌿 **Cilantro Growing** | ESP32 + Sensors + 5 Valves | **฿2,800-4,000** | ⭐⭐⭐⭐⭐ |
+| 🍄 **Mushroom Growing** | ESP32 + Sensors + 1 Valve | **฿2,000-3,000** | ⭐⭐⭐⭐ |
 
 ---
 
@@ -272,13 +361,13 @@ Upload Speed: 921600
 ### 1️⃣ เลือกระบบ
 ```bash
 # เข้าไปใน folder ระบบที่ต้องการ
-cd systems/[system_name]/code/
+cd "new System/[system_name]/"
 ```
 
 ### 2️⃣ เปิดโค้ด
 ```bash
-# เปิดไฟล์หลัก (ไม่ใช่ *_old.ino)
-open [system_name]_system.ino
+# เปิดไฟล์หลัก
+open [system_name].ino
 ```
 
 ### 3️⃣ แก้ไขการตั้งค่า
@@ -297,40 +386,33 @@ const char* blynk_token = "Token_จาก_Blynk";
 
 ---
 
-## 🌟 ไฮไลท์ของเวอร์ชัน 2.0
+## 🌟 ไฮไลท์ของเวอร์ชัน 3.0
 
-### 🖥️ Boot Screen ที่สวยงาม
-ทุกระบบจะแสดง:
-```
-FW make by RDTRC
-Version 2.0
-    ↓
-[System Name]
-Initializing...
-    ↓
-Loading Animation
-................
-    ↓
-System Ready!
-```
+### 🛡️ Offline Detection System
+ทุกระบบสามารถ:
+- ตรวจสอบ sensor ที่เสีย
+- ข้าม sensor ที่ไม่ทำงาน
+- ทำงานต่อได้แม้ sensor บางตัวเสีย
+- แสดงสถานะ sensor แบบเรียลไทม์
 
-### 🔧 SystemBase Class
-- ไม่ต้องเขียนโค้ดพื้นฐานซ้ำ
-- Error handling อัตโนมัติ
-- Web interface มาตรฐาน
-- API endpoints ครบครัน
+### 📺 LCD Skip Logic
+- ตรวจสอบการเชื่อมต่อ LCD
+- ข้ามการใช้งานถ้าไม่เชื่อมต่อ
+- ลดการใช้พลังงาน
+- ป้องกันข้อผิดพลาด
 
-### 📱 Web Interface ปรับปรุง
-- หน้าตาสวยงามและใช้งานง่าย
-- ตอบสนองบนมือถือ
-- แสดงข้อมูลแบบเรียลไทม์
-- ควบคุมระบบได้ครบครัน
+### 🌡️ Comprehensive Sensor Suite
+ทุกระบบมี sensor ที่เกี่ยวข้องครบถ้วน:
+- **Environmental**: DHT22, LDR, CO2, Air Quality
+- **Soil/Water**: pH, EC, Soil Moisture, Water Level, Flow
+- **Control**: Load Cell, PIR, Ultrasonic
+- **Display**: LCD I2C
 
-### 🔄 การจัดการที่ดีขึ้น
-- จัดเก็บไฟล์เป็นระเบียบ
-- เอกสารครบครันแยกตามหมวด
-- ไฟล์เดิมยังคงไว้ (*_old.ino)
-- อัพเกรดได้ง่าย
+### 🔄 Graceful Degradation
+- ระบบยังทำงานได้แม้ sensor บางตัวเสีย
+- ปรับการทำงานตาม sensor ที่ใช้งานได้
+- แจ้งเตือนเมื่อ sensor เสีย
+- บันทึกข้อมูลการทำงาน
 
 ---
 
@@ -340,7 +422,7 @@ System Ready!
 
 1. **ดูเอกสาร** - เริ่มจาก README ของระบบที่เลือก
 2. **ตรวจสอบ Troubleshooting** - ในคู่มือการติดตั้ง
-3. **ดู Common Issues** - ใน SYSTEM_STRUCTURE_GUIDE.md
+3. **ดู Sensor Status** - ตรวจสอบ sensor ที่เสีย
 4. **รายงานปัญหา** - สร้าง GitHub Issue
 
 ### 🤝 ต้องการมีส่วนร่วม?
@@ -354,44 +436,50 @@ System Ready!
 
 ## 🎯 Roadmap
 
-### 📅 Version 2.1 (Q2 2024)
-- [ ] ESP32-CAM integration
-- [ ] SD Card data logging  
-- [ ] Email notifications
-- [ ] Advanced web dashboard
+### 📅 Version 3.1 (Q2 2024)
+- [ ] Machine Learning integration
+- [ ] Advanced analytics dashboard
+- [ ] Multi-language support
+- [ ] Cloud data sync
 
-### 📅 Version 2.2 (Q3 2024)
-- [ ] Telegram bot
-- [ ] Voice control
-- [ ] React Native mobile app
-- [ ] Multi-system dashboard
-
-### 📅 Version 3.0 (Q4 2024)
-- [ ] AI recommendations
+### 📅 Version 3.2 (Q3 2024)
+- [ ] AI-powered recommendations
 - [ ] Weather integration
-- [ ] Cloud analytics
-- [ ] Commercial kit
+- [ ] Mobile app development
+- [ ] Commercial deployment
+
+### 📅 Version 4.0 (Q4 2024)
+- [ ] Edge AI processing
+- [ ] Blockchain integration
+- [ ] IoT marketplace
+- [ ] Enterprise solutions
 
 ---
 
 <div align="center">
 
-## 🎉 ยินดีต้อนรับสู่ RDTRC IoT Systems v2.0!
+## 🎉 ยินดีต้อนรับสู่ RDTRC IoT Systems v3.0!
 
-**โครงสร้างใหม่ | Boot Screen สวยงาม | ระบบมาตรฐาน**
+**Sensor Suite ครบครัน | Offline Detection | Graceful Degradation**
 
-[![Get Started](https://img.shields.io/badge/Get%20Started-Now-green.svg?style=for-the-badge)](systems/)
-[![Documentation](https://img.shields.io/badge/Read%20Docs-blue.svg?style=for-the-badge)](systems/common/docs/)
+[![Get Started](https://img.shields.io/badge/Get%20Started-Now-green.svg?style=for-the-badge)](new System/)
+[![Documentation](https://img.shields.io/badge/Read%20Docs-blue.svg?style=for-the-badge)](docs/)
 [![Support](https://img.shields.io/badge/Get%20Support-orange.svg?style=for-the-badge)](https://github.com)
 
-**Firmware made by RDTRC - Professional IoT Solutions for Agriculture & Pet Care**
+**Firmware made by RDTRC - Advanced IoT Solutions with Smart Sensor Management**
 
 ### 🔗 Quick Links
 
-| 🐱 [Cat Feeding](systems/cat_feeding/) | 🐦 [Bird Feeding](systems/bird_feeding/) | 🍅 [Tomato Watering](systems/tomato_watering/) |
+| 🌸 [Orchid](new System/orchid_watering_system/) | 🍅 [Tomato](new System/tomato_watering/) | 🐱 [Cat](new System/cat_feeding_system/) |
 |:---:|:---:|:---:|
-| ให้อาหารแมวอัตโนมัติ | ให้อาหารนกอัตโนมัติ | รดน้ำมะเขือเทศอัตโนมัติ |
-| Load Cell + PIR | Ultrasonic + Pump | Soil Sensor + DHT22 |
-| ฿1,500-2,500 | ฿1,800-2,800 | ฿2,000-3,000 |
+| ระบบรดน้ำกล้วยไม้ | ระบบรดน้ำมะเขือเทศ | ระบบให้อาหารแมว |
+| 6 โซน + Sensor ครบ | 4 โซน + Sensor ครบ | Load Cell + Sensor ครบ |
+| ฿3,500-5,000 | ฿3,000-4,500 | ฿2,500-3,500 |
+
+| 🐦 [Bird](new System/BirdFeedingSystem/) | 🌿 [Cilantro](new System/cilantro_system/) | 🍄 [Mushroom](new System/standalone_projects_mushroom/) |
+|:---:|:---:|:---:|
+| ระบบให้อาหารนก | ระบบปลูกผักชี | ระบบปลูกเห็ด |
+| Load Cell + Sensor ครบ | 5 โซน + Sensor ครบ | 1 โซน + Sensor ครบ |
+| ฿2,500-3,500 | ฿2,800-4,000 | ฿2,000-3,000 |
 
 </div>

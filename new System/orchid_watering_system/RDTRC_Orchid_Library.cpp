@@ -643,3 +643,4 @@ void RDTRCOrchidEnvironment::logEnvironmentalData(float temp, float humidity, fl
   String data = getEnvironmentalDataString(temp, humidity, ph, ec, light, soilMoisture);
   Serial.println("ENV_LOG: " + data);
 }
+

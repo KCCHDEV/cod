@@ -64,6 +64,10 @@ const char* lineToken = "YOUR_LINE_NOTIFY_TOKEN";
 #define CO2_SENSOR_PIN 23
 #define PH_SENSOR_PIN 32
 #define LIGHT_SENSOR_PIN 33
+#define EC_SENSOR_PIN 25
+#define AIR_QUALITY_SENSOR_PIN 26
+#define WATER_LEVEL_SENSOR_PIN 27
+#define FLOW_SENSOR_PIN 35
 
 // Mushroom Zone Pins
 #define MUSHROOM_SOIL_PIN 34
@@ -97,12 +101,46 @@ const char* lineToken = "YOUR_LINE_NOTIFY_TOKEN";
 #define OPTIMAL_PH_MIN 6.0
 #define OPTIMAL_PH_MAX 7.0
 
+// Environmental thresholds for mushroom growing
+#define TEMP_MIN 15.0
+#define TEMP_MAX 35.0
+#define HUMIDITY_MIN 30.0
+#define HUMIDITY_MAX 95.0
+#define EC_MIN 0.5
+#define EC_MAX 3.0
+#define AIR_QUALITY_MIN 50.0
+
+// Offline detection constants
+#define SENSOR_TIMEOUT 30000      // 30 seconds timeout
+#define SENSOR_RETRY_INTERVAL 60000 // 1 minute retry interval
+
 // System Objects
 WebServer server(80);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200, 60000); // UTC+7 Thailand
 DHT dht(DHT_PIN, DHT_TYPE);
 RDTRC_LCD systemLCD;
+
+// Sensor Status Structure
+struct SensorStatus {
+  bool isOnline;
+  unsigned long lastReading;
+  float lastValue;
+  int errorCount;
+  String sensorName;
+};
+
+// Sensor Status Instances
+SensorStatus dhtSensor;
+SensorStatus co2Sensor;
+SensorStatus phSensor;
+SensorStatus ecSensor;
+SensorStatus lightSensor;
+SensorStatus airQualitySensor;
+SensorStatus waterLevelSensor;
+SensorStatus flowSensor;
+SensorStatus soilSensor;
+SensorStatus lcdSensor;
 
 // System Variables
 bool isWiFiConnected = false;
@@ -145,8 +183,11 @@ float ambientTemperature = 0;
 float ambientHumidity = 0;
 int co2Level = 0;
 float phLevel = 7.0;
+float ecLevel = 0;
 int lightLevel = 0;
+float airQualityLevel = 0;
 float waterLevel = 0;
+float flowRate = 0;
 bool isDaylight = true;
 bool systemMaintenanceMode = false;
 
@@ -206,6 +247,13 @@ void loadSettings();
 void performSystemMaintenance();
 void updateGrowthPhases();
 void checkAlerts();
+void initializeSensors();
+void checkSensorStatus();
+void updateSensorStatus(int sensorId, bool success, float value);
+void handleSensorError(int sensorId, String sensorName);
+void gracefulDegradation();
+bool canOperateWithOfflineSensors();
+String getSensorStatusString();
 
 void setup() {
   Serial.begin(115200);
@@ -311,7 +359,14 @@ void setupSystem() {
   pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
   pinMode(MANUAL_BUTTON_PIN, INPUT_PULLUP);
   pinMode(LCD_NEXT_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(DHT_PIN, INPUT);
   pinMode(LIGHT_SENSOR_PIN, INPUT);
+  pinMode(PH_SENSOR_PIN, INPUT);
+  pinMode(EC_SENSOR_PIN, INPUT);
+  pinMode(CO2_SENSOR_PIN, INPUT);
+  pinMode(AIR_QUALITY_SENSOR_PIN, INPUT);
+  pinMode(WATER_LEVEL_SENSOR_PIN, INPUT);
+  pinMode(FLOW_SENSOR_PIN, INPUT);
   pinMode(WATER_LEVEL_TRIG_PIN, OUTPUT);
   pinMode(WATER_LEVEL_ECHO_PIN, INPUT);
   
@@ -331,6 +386,10 @@ void setupSystem() {
   // Initialize DHT sensor
   dht.begin();
   systemLCD.showDebug("DHT22 Init", "Sensor Ready");
+  
+  // Initialize sensors
+  initializeSensors();
+  systemLCD.showDebug("Sensors", "Initialized");
   
   // Initialize SPIFFS
   if (!SPIFFS.begin(true)) {
@@ -740,19 +799,25 @@ void handleLCDControls() {
 void updateLCDDisplay() {
   // Update LCD status every 2 seconds
   if (millis() - lastLCDUpdate > 2000) {
-    systemLCD.updateStatus(
-      SYSTEM_NAME,
-      ambientTemperature,
-      ambientHumidity,
-      mushroom.currentMoisture,
-      mushroom.growthPhase,
-      isWiFiConnected,
-      systemMaintenanceMode,
-      todayStats.alerts
-    );
-    
-    // Update LCD display
-    systemLCD.update();
+    // Only update LCD if it's online
+    if (lcdSensor.isOnline && systemLCD.isLCDConnected()) {
+      systemLCD.updateStatus(
+        SYSTEM_NAME,
+        ambientTemperature,
+        ambientHumidity,
+        mushroom.currentMoisture,
+        mushroom.growthPhase,
+        isWiFiConnected,
+        systemMaintenanceMode,
+        todayStats.alerts
+      );
+      
+      // Update LCD display
+      systemLCD.update();
+    } else {
+      // LCD is offline - skip display updates
+      Serial.println("LCD offline - skipping display updates");
+    }
     
     lastLCDUpdate = millis();
   }
@@ -828,61 +893,112 @@ void controlMushrooms() {
 
 void readSensors() {
   // Read DHT sensor
-  ambientTemperature = dht.readTemperature();
-  ambientHumidity = dht.readHumidity();
-  
-  // Check for sensor errors
-  if (isnan(ambientTemperature) || isnan(ambientHumidity)) {
-    Serial.println("DHT sensor error");
-    systemLCD.showDebug("DHT Error", "Check Sensor");
-    ambientTemperature = 0;
-    ambientHumidity = 0;
+  if (dhtSensor.isOnline) {
+    ambientTemperature = dht.readTemperature();
+    ambientHumidity = dht.readHumidity();
+    
+    if (isnan(ambientTemperature) || isnan(ambientHumidity)) {
+      handleSensorError(-1, dhtSensor.sensorName);
+      ambientTemperature = 0;
+      ambientHumidity = 0;
+    } else {
+      updateSensorStatus(-1, true, ambientTemperature);
+    }
   }
   
-  // Read CO2 sensor (analog approximation)
-  int co2Raw = analogRead(CO2_SENSOR_PIN);
-  co2Level = map(co2Raw, 0, 4095, 400, 2000); // Map to ppm range
+  // Read CO2 sensor
+  if (co2Sensor.isOnline) {
+    int co2Raw = analogRead(CO2_SENSOR_PIN);
+    co2Level = map(co2Raw, 0, 4095, 400, 2000); // Map to ppm range
+    updateSensorStatus(1, true, co2Level);
+  }
   
-  // Read pH sensor (analog approximation)
-  int phRaw = analogRead(PH_SENSOR_PIN);
-  phLevel = map(phRaw, 0, 4095, 4.0 * 100, 10.0 * 100) / 100.0; // Map to pH range
+  // Read pH sensor
+  if (phSensor.isOnline) {
+    int phRaw = analogRead(PH_SENSOR_PIN);
+    phLevel = map(phRaw, 0, 4095, 4.0 * 100, 10.0 * 100) / 100.0; // Map to pH range
+    updateSensorStatus(2, true, phLevel);
+  }
+  
+  // Read EC sensor
+  if (ecSensor.isOnline) {
+    int ecRaw = analogRead(EC_SENSOR_PIN);
+    ecLevel = map(ecRaw, 0, 4095, 0, 5); // Convert to mS/cm
+    updateSensorStatus(3, true, ecLevel);
+  }
   
   // Read light sensor
-  lightLevel = analogRead(LIGHT_SENSOR_PIN);
-  isDaylight = lightLevel > 500;
+  if (lightSensor.isOnline) {
+    lightLevel = analogRead(LIGHT_SENSOR_PIN);
+    isDaylight = lightLevel > 500;
+    updateSensorStatus(4, true, lightLevel);
+  }
   
-  // Read water level using ultrasonic sensor
-  digitalWrite(WATER_LEVEL_TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(WATER_LEVEL_TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(WATER_LEVEL_TRIG_PIN, LOW);
+  // Read air quality sensor
+  if (airQualitySensor.isOnline) {
+    int aqRaw = analogRead(AIR_QUALITY_SENSOR_PIN);
+    airQualityLevel = map(aqRaw, 0, 4095, 0, 100); // Convert to percentage
+    updateSensorStatus(5, true, airQualityLevel);
+  }
   
-  long duration = pulseIn(WATER_LEVEL_ECHO_PIN, HIGH, 30000);
-  if (duration > 0) {
-    waterLevel = WATER_TANK_HEIGHT - (duration * 0.034 / 2);
-    if (waterLevel < 0) waterLevel = 0;
-    if (waterLevel > WATER_TANK_HEIGHT) waterLevel = WATER_TANK_HEIGHT;
+  // Read water level sensor
+  if (waterLevelSensor.isOnline) {
+    int wlRaw = analogRead(WATER_LEVEL_SENSOR_PIN);
+    waterLevel = map(wlRaw, 0, 4095, 0, 100); // Convert to percentage
+    updateSensorStatus(6, true, waterLevel);
+  }
+  
+  // Read flow sensor
+  if (flowSensor.isOnline) {
+    int flowRaw = analogRead(FLOW_SENSOR_PIN);
+    flowRate = map(flowRaw, 0, 4095, 0, 10); // Convert to L/min
+    updateSensorStatus(7, true, flowRate);
   }
   
   // Read soil moisture sensor
-  int mushroomRaw = analogRead(mushroom.soilPin);
-  mushroom.currentMoisture = map(mushroomRaw, 4095, 0, 0, 100); // Invert for dry=low, wet=high
-  if (mushroom.currentMoisture < 0) mushroom.currentMoisture = 0;
-  if (mushroom.currentMoisture > 100) mushroom.currentMoisture = 100;
+  if (soilSensor.isOnline) {
+    int mushroomRaw = analogRead(mushroom.soilPin);
+    mushroom.currentMoisture = map(mushroomRaw, 4095, 0, 0, 100); // Invert for dry=low, wet=high
+    if (mushroom.currentMoisture < 0) mushroom.currentMoisture = 0;
+    if (mushroom.currentMoisture > 100) mushroom.currentMoisture = 100;
+    updateSensorStatus(8, true, mushroom.currentMoisture);
+  }
   
   // Update zone temperature and humidity (assuming ambient for now)
   mushroom.currentTemp = ambientTemperature;
   mushroom.currentHumidity = ambientHumidity;
   
-  // Update Blynk with sensor data
+  // Check sensor status and apply graceful degradation
+  checkSensorStatus();
+  gracefulDegradation();
+  
+  // Update Blynk with sensor data (only if sensors are online)
   if (isWiFiConnected) {
-    Blynk.virtualWrite(V1, ambientTemperature);
-    Blynk.virtualWrite(V2, ambientHumidity);
-    Blynk.virtualWrite(V3, co2Level);
-    Blynk.virtualWrite(V4, phLevel);
-    Blynk.virtualWrite(V5, waterLevel);
-    Blynk.virtualWrite(V6, lightLevel);
+    if (dhtSensor.isOnline) {
+      Blynk.virtualWrite(V1, ambientTemperature);
+      Blynk.virtualWrite(V2, ambientHumidity);
+    }
+    if (co2Sensor.isOnline) {
+      Blynk.virtualWrite(V3, co2Level);
+    }
+    if (phSensor.isOnline) {
+      Blynk.virtualWrite(V4, phLevel);
+    }
+    if (ecSensor.isOnline) {
+      Blynk.virtualWrite(V5, ecLevel);
+    }
+    if (waterLevelSensor.isOnline) {
+      Blynk.virtualWrite(V6, waterLevel);
+    }
+    if (lightSensor.isOnline) {
+      Blynk.virtualWrite(V7, lightLevel);
+    }
+    if (airQualitySensor.isOnline) {
+      Blynk.virtualWrite(V8, airQualityLevel);
+    }
+    if (flowSensor.isOnline) {
+      Blynk.virtualWrite(V9, flowRate);
+    }
     Blynk.virtualWrite(V10, mushroom.currentMoisture);
   }
 }
@@ -1265,6 +1381,236 @@ BLYNK_READ(V1) { Blynk.virtualWrite(V1, ambientTemperature); }
 BLYNK_READ(V2) { Blynk.virtualWrite(V2, ambientHumidity); }
 BLYNK_READ(V3) { Blynk.virtualWrite(V3, co2Level); }
 BLYNK_READ(V4) { Blynk.virtualWrite(V4, phLevel); }
-BLYNK_READ(V5) { Blynk.virtualWrite(V5, waterLevel); }
-BLYNK_READ(V6) { Blynk.virtualWrite(V6, lightLevel); }
+BLYNK_READ(V5) { Blynk.virtualWrite(V5, ecLevel); }
+BLYNK_READ(V6) { Blynk.virtualWrite(V6, waterLevel); }
+BLYNK_READ(V7) { Blynk.virtualWrite(V7, lightLevel); }
+BLYNK_READ(V8) { Blynk.virtualWrite(V8, airQualityLevel); }
+BLYNK_READ(V9) { Blynk.virtualWrite(V9, flowRate); }
 BLYNK_READ(V10) { Blynk.virtualWrite(V10, mushroom.currentMoisture); }
+
+// Sensor Management Functions
+void initializeSensors() {
+  // Initialize DHT sensor
+  dhtSensor.isOnline = true;
+  dhtSensor.lastReading = millis();
+  dhtSensor.lastValue = 0;
+  dhtSensor.errorCount = 0;
+  dhtSensor.sensorName = "DHT";
+  
+  // Initialize CO2 sensor
+  co2Sensor.isOnline = true;
+  co2Sensor.lastReading = millis();
+  co2Sensor.lastValue = 0;
+  co2Sensor.errorCount = 0;
+  co2Sensor.sensorName = "CO2";
+  
+  // Initialize pH sensor
+  phSensor.isOnline = true;
+  phSensor.lastReading = millis();
+  phSensor.lastValue = 0;
+  phSensor.errorCount = 0;
+  phSensor.sensorName = "pH";
+  
+  // Initialize EC sensor
+  ecSensor.isOnline = true;
+  ecSensor.lastReading = millis();
+  ecSensor.lastValue = 0;
+  ecSensor.errorCount = 0;
+  ecSensor.sensorName = "EC";
+  
+  // Initialize light sensor
+  lightSensor.isOnline = true;
+  lightSensor.lastReading = millis();
+  lightSensor.lastValue = 0;
+  lightSensor.errorCount = 0;
+  lightSensor.sensorName = "Light";
+  
+  // Initialize air quality sensor
+  airQualitySensor.isOnline = true;
+  airQualitySensor.lastReading = millis();
+  airQualitySensor.lastValue = 0;
+  airQualitySensor.errorCount = 0;
+  airQualitySensor.sensorName = "AirQuality";
+  
+  // Initialize water level sensor
+  waterLevelSensor.isOnline = true;
+  waterLevelSensor.lastReading = millis();
+  waterLevelSensor.lastValue = 0;
+  waterLevelSensor.errorCount = 0;
+  waterLevelSensor.sensorName = "WaterLevel";
+  
+  // Initialize flow sensor
+  flowSensor.isOnline = true;
+  flowSensor.lastReading = millis();
+  flowSensor.lastValue = 0;
+  flowSensor.errorCount = 0;
+  flowSensor.sensorName = "Flow";
+  
+  // Initialize soil moisture sensor
+  soilSensor.isOnline = true;
+  soilSensor.lastReading = millis();
+  soilSensor.lastValue = 0;
+  soilSensor.errorCount = 0;
+  soilSensor.sensorName = "Soil";
+  
+  // Initialize LCD sensor
+  lcdSensor.isOnline = true;
+  lcdSensor.lastReading = millis();
+  lcdSensor.lastValue = 0;
+  lcdSensor.errorCount = 0;
+  lcdSensor.sensorName = "LCD";
+  
+  Serial.println("All sensors initialized");
+}
+
+void checkSensorStatus() {
+  unsigned long currentTime = millis();
+  
+  // Check DHT sensor
+  if (dhtSensor.isOnline && (currentTime - dhtSensor.lastReading > SENSOR_TIMEOUT)) {
+    dhtSensor.isOnline = false;
+    Serial.println("DHT sensor offline");
+  }
+  
+  // Check CO2 sensor
+  if (co2Sensor.isOnline && (currentTime - co2Sensor.lastReading > SENSOR_TIMEOUT)) {
+    co2Sensor.isOnline = false;
+    Serial.println("CO2 sensor offline");
+  }
+  
+  // Check pH sensor
+  if (phSensor.isOnline && (currentTime - phSensor.lastReading > SENSOR_TIMEOUT)) {
+    phSensor.isOnline = false;
+    Serial.println("pH sensor offline");
+  }
+  
+  // Check EC sensor
+  if (ecSensor.isOnline && (currentTime - ecSensor.lastReading > SENSOR_TIMEOUT)) {
+    ecSensor.isOnline = false;
+    Serial.println("EC sensor offline");
+  }
+  
+  // Check light sensor
+  if (lightSensor.isOnline && (currentTime - lightSensor.lastReading > SENSOR_TIMEOUT)) {
+    lightSensor.isOnline = false;
+    Serial.println("Light sensor offline");
+  }
+  
+  // Check air quality sensor
+  if (airQualitySensor.isOnline && (currentTime - airQualitySensor.lastReading > SENSOR_TIMEOUT)) {
+    airQualitySensor.isOnline = false;
+    Serial.println("Air quality sensor offline");
+  }
+  
+  // Check water level sensor
+  if (waterLevelSensor.isOnline && (currentTime - waterLevelSensor.lastReading > SENSOR_TIMEOUT)) {
+    waterLevelSensor.isOnline = false;
+    Serial.println("Water level sensor offline");
+  }
+  
+  // Check flow sensor
+  if (flowSensor.isOnline && (currentTime - flowSensor.lastReading > SENSOR_TIMEOUT)) {
+    flowSensor.isOnline = false;
+    Serial.println("Flow sensor offline");
+  }
+  
+  // Check soil moisture sensor
+  if (soilSensor.isOnline && (currentTime - soilSensor.lastReading > SENSOR_TIMEOUT)) {
+    soilSensor.isOnline = false;
+    Serial.println("Soil moisture sensor offline");
+  }
+  
+  // Check LCD sensor
+  if (lcdSensor.isOnline && !systemLCD.isLCDConnected()) {
+    lcdSensor.isOnline = false;
+    Serial.println("LCD sensor offline");
+  }
+}
+
+void updateSensorStatus(int sensorId, bool success, float value) {
+  SensorStatus* sensor = nullptr;
+  
+  switch (sensorId) {
+    case -1: sensor = &dhtSensor; break;
+    case 1: sensor = &co2Sensor; break;
+    case 2: sensor = &phSensor; break;
+    case 3: sensor = &ecSensor; break;
+    case 4: sensor = &lightSensor; break;
+    case 5: sensor = &airQualitySensor; break;
+    case 6: sensor = &waterLevelSensor; break;
+    case 7: sensor = &flowSensor; break;
+    case 8: sensor = &soilSensor; break;
+  }
+  
+  if (sensor) {
+    if (success) {
+      sensor->lastReading = millis();
+      sensor->lastValue = value;
+      sensor->errorCount = 0;
+      if (!sensor->isOnline) {
+        sensor->isOnline = true;
+        Serial.println(sensor->sensorName + " sensor back online");
+      }
+    } else {
+      sensor->errorCount++;
+      if (sensor->errorCount >= 3) {
+        sensor->isOnline = false;
+        Serial.println(sensor->sensorName + " sensor marked offline");
+      }
+    }
+  }
+}
+
+void handleSensorError(int sensorId, String sensorName) {
+  Serial.println("Sensor error: " + sensorName);
+  updateSensorStatus(sensorId, false, 0);
+}
+
+void gracefulDegradation() {
+  // Check if critical sensors are offline
+  bool criticalSensorsOffline = !dhtSensor.isOnline || !soilSensor.isOnline;
+  
+  if (criticalSensorsOffline) {
+    Serial.println("Critical sensors offline - entering degraded mode");
+    systemLCD.showDebug("Degraded Mode", "Critical Sensors Offline");
+  }
+  
+  // Check if system can still operate
+  if (!canOperateWithOfflineSensors()) {
+    Serial.println("Too many sensors offline - system may not function properly");
+    systemLCD.showAlert("SENSOR ERROR", 3000);
+  }
+}
+
+bool canOperateWithOfflineSensors() {
+  // Count online sensors
+  int onlineSensors = 0;
+  if (dhtSensor.isOnline) onlineSensors++;
+  if (co2Sensor.isOnline) onlineSensors++;
+  if (phSensor.isOnline) onlineSensors++;
+  if (ecSensor.isOnline) onlineSensors++;
+  if (lightSensor.isOnline) onlineSensors++;
+  if (airQualitySensor.isOnline) onlineSensors++;
+  if (waterLevelSensor.isOnline) onlineSensors++;
+  if (flowSensor.isOnline) onlineSensors++;
+  if (soilSensor.isOnline) onlineSensors++;
+  if (lcdSensor.isOnline) onlineSensors++;
+  
+  // System can operate if at least 3 sensors are online
+  return onlineSensors >= 3;
+}
+
+String getSensorStatusString() {
+  String status = "Sensors: ";
+  status += dhtSensor.isOnline ? "D1" : "D0";
+  status += co2Sensor.isOnline ? " CO21" : " CO20";
+  status += phSensor.isOnline ? " pH1" : " pH0";
+  status += ecSensor.isOnline ? " EC1" : " EC0";
+  status += lightSensor.isOnline ? " L1" : " L0";
+  status += airQualitySensor.isOnline ? " AQ1" : " AQ0";
+  status += waterLevelSensor.isOnline ? " WL1" : " WL0";
+  status += flowSensor.isOnline ? " F1" : " F0";
+  status += soilSensor.isOnline ? " S1" : " S0";
+  status += lcdSensor.isOnline ? " LCD1" : " LCD0";
+  return status;
+}

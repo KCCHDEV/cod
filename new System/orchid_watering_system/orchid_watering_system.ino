@@ -235,3 +235,4 @@ void calibrateSensors();
 void updateBlynk();
 void handleSensorError(int sensorIndex, String sensorName);
 void gracefulDegradation();
+
